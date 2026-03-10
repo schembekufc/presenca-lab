@@ -321,13 +321,17 @@
 
     <script>
         const SHEET_ID = '1RX6L8yxukcRhLoih3gH6BUsrx4JgZeIG4duKSu8ciIU';
-        const GID_HORARIOS = '0';
+        const GID_HORARIOS = '1651859946';
         const GID_MONO = '766295141';
         const GID_VW = '146544989';
+        const GID_BLOCO = '0';
+        const GID_TROCADOR = '790239595';
 
         const URL_HORARIOS = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_HORARIOS}`;
         const URL_MONO = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_MONO}`;
         const URL_VW = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_VW}`;
+        const URL_BLOCO = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_BLOCO}`;
+        const URL_TROCADOR = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_TROCADOR}`;
 
         const DAYS_MAP = { 1: [1, 9], 2: [9, 17], 3: [17, 25], 4: [25, 33], 5: [33, 40] };
         const DAY_NAMES = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
@@ -420,14 +424,19 @@
         }
 
         async function updateTasks() {
-            const [monoData, vwData] = await Promise.all([fetchCSV(URL_MONO), fetchCSV(URL_VW)]);
+            const [monoData, vwData, blocoData, trocadorData] = await Promise.all([
+                fetchCSV(URL_MONO),
+                fetchCSV(URL_VW),
+                fetchCSV(URL_BLOCO),
+                fetchCSV(URL_TROCADOR)
+            ]);
             const taskMap = {};
             const processTab = (data, proj) => {
                 if (!data) return;
                 for (let i = 0; i < data.length; i++) {
                     const row = data[i];
-                    if (row.length < 4) continue;
-                    const task = row[1], resp = row[3];
+                    if (row.length < 5) continue;
+                    const task = row[2], resp = row[4];
                     // Ignora cabeçalhos ou linhas inválidas
                     if (task && resp &&
                         resp.toLowerCase() !== "responsavel" &&
@@ -448,6 +457,8 @@
             };
             processTab(monoData, "Bancada Mono");
             processTab(vwData, "Bancada VW");
+            processTab(blocoData, "Bloco Motores");
+            processTab(trocadorData, "Trocador Calor");
             cachedTasks = taskMap;
         }
 
