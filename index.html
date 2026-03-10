@@ -38,15 +38,20 @@
 
         header {
             text-align: center;
-            margin-bottom: 3rem;
+            margin-bottom: 2rem;
         }
 
         h1 {
             font-size: 2.5rem;
             background: linear-gradient(to right, #38bdf8, #818cf8);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
         }
 
         #current-time {
@@ -55,9 +60,95 @@
             font-weight: 300;
         }
 
+        .controls-bar {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .controls-bar select {
+            background: #2d3748;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            font-family: inherit;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .btn-mode {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-realtime {
+            background: var(--primary);
+            color: #0f172a;
+        }
+
+        .btn-consult {
+            background: #ffcc00;
+            color: #0f172a;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            font-weight: 800;
+            color: white;
+        }
+
+        .badge-live {
+            background: #ef4444;
+            animation: pulse 2s infinite;
+        }
+
+        .badge-manual {
+            background: #ffcc00;
+            color: #000;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
         .container {
             width: 100%;
-            max-width: 1000px;
+            max-width: 1200px;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 1.5rem;
@@ -185,7 +276,7 @@
             }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 1024px) {
             .container {
                 grid-template-columns: 1fr;
             }
@@ -200,17 +291,35 @@
 <body>
 
     <header>
-        <h1>Monitor de Presença</h1>
+        <h1>Monitor de Presença <span id="mode-badge" class="status-badge badge-live">LIVE</span></h1>
         <p id="current-time">Carregando...</p>
     </header>
+
+    <div class="controls-bar">
+        <div class="control-group">
+            <button id="toggle-mode" class="btn-mode btn-realtime">Modo: Real-Time</button>
+        </div>
+        <div class="control-group">
+            <label for="select-day">Dia:</label>
+            <select id="select-day">
+                <option value="1">Segunda-feira</option>
+                <option value="2">Terça-feira</option>
+                <option value="3">Quarta-feira</option>
+                <option value="4">Quinta-feira</option>
+                <option value="5">Sexta-feira</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="select-hour">Hora:</label>
+            <select id="select-hour"></select>
+        </div>
+    </div>
 
     <div class="container" id="app-container">
         <div class="loading">Sincronizando com Google Sheets...</div>
     </div>
 
     <script>
-        // URL da planilha publicada como CSV (Aba HORÁRIOS)
-        // Link configurado para exportação CSV direta
         const SHEET_ID = '1NdSMN26GilAADXI8S4h9fmn9yiUUSEuJmwWlGMnjbzE';
         const GID_HORARIOS = '1651859946';
         const GID_MONO = '766295141';
@@ -223,18 +332,59 @@
         const DAYS_MAP = { 1: [1, 9], 2: [9, 17], 3: [17, 25], 4: [25, 33], 5: [33, 40] };
         const DAY_NAMES = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 
-        let cachedTasks = {}; // name -> [{task, project}]
+        let cachedTasks = {};
+        let isRealTime = true;
+        let globalSheetData = null;
+
+        const selectDay = document.getElementById('select-day');
+        const selectHour = document.getElementById('select-hour');
+        const btnToggle = document.getElementById('toggle-mode');
+        const modeBadge = document.getElementById('mode-badge');
+
+        for (let i = 8; i <= 20; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.innerText = `${i.toString().padStart(2, '0')}:00`;
+            selectHour.appendChild(opt);
+        }
+
+        function updateModeUI() {
+            if (isRealTime) {
+                btnToggle.className = "btn-mode btn-realtime";
+                btnToggle.innerText = "Modo: Real-Time";
+                modeBadge.className = "status-badge badge-live";
+                modeBadge.innerText = "LIVE";
+                const now = new Date();
+                const d = now.getDay();
+                selectDay.value = (d === 0 || d === 6) ? 1 : d;
+                selectHour.value = now.getHours();
+            } else {
+                btnToggle.className = "btn-mode btn-consult";
+                btnToggle.innerText = "Voltar ao Real-Time";
+                modeBadge.className = "status-badge badge-manual";
+                modeBadge.innerText = "CONSULTA";
+            }
+        }
+
+        btnToggle.addEventListener('click', () => {
+            isRealTime = !isRealTime;
+            updateModeUI();
+            if (globalSheetData) updateUI(globalSheetData);
+        });
+
+        [selectDay, selectHour].forEach(el => el.addEventListener('change', () => {
+            isRealTime = false;
+            updateModeUI();
+            if (globalSheetData) updateUI(globalSheetData);
+        }));
 
         async function fetchCSV(url) {
             try {
                 const response = await fetch(url);
                 const csvText = await response.text();
-                const lines = csvText.split('\n');
-                return lines.map(line => {
-                    return line.split(',').map(cell => cell.replace(/"/g, '').trim());
-                });
+                return csvText.split('\n').map(line => line.split(',').map(cell => cell.replace(/"/g, '').trim()));
             } catch (error) {
-                console.error("Erro ao carregar CSV:", url, error);
+                console.error("Erro ao carregar CSV:", error);
                 return null;
             }
         }
@@ -242,150 +392,94 @@
         async function updateTasks() {
             const [monoData, vwData] = await Promise.all([fetchCSV(URL_MONO), fetchCSV(URL_VW)]);
             const taskMap = {};
-
-            const processTab = (data, projectName) => {
+            const processTab = (data, proj) => {
                 if (!data) return;
-                // As tarefas costumam começar na linha 10 (índice 9)
                 for (let i = 9; i < data.length; i++) {
-                    const taskDesc = data[i][2]; // Coluna C
-                    const responsibles = data[i][4]; // Coluna E
-                    if (taskDesc && responsibles && responsibles.toLowerCase() !== "responsavel") {
-                        const names = responsibles.split(',').map(n => n.trim());
-                        names.forEach(name => {
+                    const task = data[i][2], resp = data[i][4];
+                    if (task && resp && resp.toLowerCase() !== "responsavel") {
+                        resp.split(',').map(n => n.trim()).forEach(name => {
                             if (!taskMap[name]) taskMap[name] = [];
-                            taskMap[name].push({ task: taskDesc, project: projectName });
+                            taskMap[name].push({ task, project: proj });
                         });
                     }
                 }
             };
-
             processTab(monoData, "Bancada Mono");
             processTab(vwData, "Bancada VW");
             cachedTasks = taskMap;
         }
 
         function getPeopleForHour(data, weekday, hour) {
-            if (weekday < 1 || weekday > 5) return ["Fim de Semana"];
-
-            const [colStart, colEnd] = DAYS_MAP[weekday];
-
-            // Procura a linha da hora
+            const range = DAYS_MAP[weekday];
+            if (!range) return [];
+            const [start, end] = range;
             let rowData = null;
             for (let i = 0; i < data.length; i++) {
-                const timeCell = data[i][0];
-                if (!timeCell) continue;
-
-                // Regex para pegar os números da hora na primeira célula (ex: "16 - 17" ou "16:00")
-                const hours = timeCell.match(/\d+/g);
-                if (hours && hours.length >= 2) {
-                    const hStart = parseInt(hours[0]);
-                    const hEnd = parseInt(hours[1]);
-                    if (hour >= hStart && hour < hEnd) {
-                        rowData = data[i];
-                        break;
-                    }
+                const hours = (data[i][0] || "").match(/\d+/g);
+                if (hours && hours.length >= 2 && hour >= parseInt(hours[0]) && hour < parseInt(hours[1])) {
+                    rowData = data[i]; break;
                 }
             }
-
-            if (!rowData) return ["-"];
-
-            const present = [];
-            for (let j = colStart; j < colEnd; j++) {
-                const val = rowData[j];
-                if (val && val !== "" && val.toLowerCase() !== "nan" && val.toLowerCase() !== "horas") {
-                    present.push(val);
-                }
+            if (!rowData) return [];
+            const res = [];
+            for (let j = start; j < end; j++) {
+                const v = rowData[j];
+                if (v && v.toLowerCase() !== "nan" && v.toLowerCase() !== "horas") res.push(v);
             }
-
-            return [...new Set(present)].sort(); // Deduplicate and sort
+            return [...new Set(res)].sort();
         }
 
         function updateUI(data) {
+            globalSheetData = data;
             const now = new Date();
-            const weekday = now.getDay(); // 0 is Sunday, 1 is Monday...
-            const currentHour = now.getHours();
+            let weekday = isRealTime ? now.getDay() : parseInt(selectDay.value);
+            let hour = isRealTime ? now.getHours() : parseInt(selectHour.value);
 
-            document.getElementById('current-time').innerText = `${DAY_NAMES[weekday]}, ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-
-            const hoursToReport = [
-                { label: 'HORA PASSADA', hour: (currentHour - 1), type: 'past' },
-                { label: 'AGORA', hour: currentHour, type: 'active' },
-                { label: 'PRÓXIMA HORA', hour: (currentHour + 1), type: 'next' }
-            ];
+            if (isRealTime) {
+                document.getElementById('current-time').innerText = `${DAY_NAMES[weekday]}, ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+                selectDay.value = (weekday === 0 || weekday === 6) ? 1 : weekday;
+                selectHour.value = hour;
+            } else {
+                document.getElementById('current-time').innerText = `Consultando: ${DAY_NAMES[weekday]} às ${hour}:00`;
+            }
 
             const container = document.getElementById('app-container');
             container.innerHTML = '';
 
-            hoursToReport.forEach(item => {
-                const people = getPeopleForHour(data, weekday, item.hour);
+            [hour - 1, hour, hour + 1].forEach((h, idx) => {
+                const labels = isRealTime ? ['HORA PASSADA', 'AGORA', 'PRÓXIMA HORA'] : ['HORA ANTERIOR', 'HORÁRIO SELECIONADO', 'HORA SEGUINTE'];
+                const people = getPeopleForHour(data, (weekday === 0 || weekday === 6) ? 1 : weekday, h);
                 const col = document.createElement('div');
-                col.className = `column ${item.type === 'active' ? 'active' : ''}`;
-
-                const h2 = document.createElement('h2');
-                h2.innerText = item.label;
-
-                const span = document.createElement('span');
-                span.className = 'time-range';
-                span.innerText = `${item.hour.toString().padStart(2, '0')}:00 - ${(item.hour + 1).toString().padStart(2, '0')}:00`;
-
-                const ul = document.createElement('ul');
-                ul.className = 'presence-list';
-
-                if (people.length === 0 || people[0] === "-") {
-                    const li = document.createElement('li');
-                    li.innerText = "Ninguém escalado";
-                    li.style.opacity = "0.5";
-                    li.style.fontSize = "0.9rem";
-                    ul.appendChild(li);
+                col.className = `column ${idx === 1 ? 'active' : ''}`;
+                col.innerHTML = `<h2>${labels[idx]}</h2><span class="time-range">${h.toString().padStart(2, '0')}:00 - ${(h + 1).toString().padStart(2, '0')}:00</span><ul class="presence-list"></ul>`;
+                const ul = col.querySelector('ul');
+                if (people.length === 0) {
+                    ul.innerHTML = '<li style="opacity:0.5; font-size:0.9rem;">Ninguém escalado</li>';
                 } else {
                     people.forEach(name => {
                         const li = document.createElement('li');
-
                         let html = `<div class="person-name">${name}</div>`;
-
-                        // Busca atividades da pessoa no cache
                         const tasks = cachedTasks[name] || [];
                         if (tasks.length > 0) {
-                            html += '<div class="task-container">';
-                            tasks.forEach(t => {
-                                html += `<div class="task-item"><span class="project-tag">${t.project}</span> ${t.task}</div>`;
-                            });
-                            html += '</div>';
+                            html += '<div class="task-container">' + tasks.map(t => `<div class="task-item"><span class="project-tag">${t.project}</span> ${t.task}</div>`).join('') + '</div>';
                         }
-
-                        li.innerHTML = html;
-                        ul.appendChild(li);
+                        li.innerHTML = html; ul.appendChild(li);
                     });
                 }
-
-                col.appendChild(h2);
-                col.appendChild(span);
-                col.appendChild(ul);
                 container.appendChild(col);
             });
         }
 
         async function init() {
-            await updateTasks(); // Carrega atividades primeiro
+            updateModeUI();
+            await updateTasks();
             const data = await fetchCSV(URL_HORARIOS);
             if (data) {
                 updateUI(data);
-
-                // Atualiza tudo (incluindo atividades) a cada 5 minutos
-                setInterval(async () => {
-                    await updateTasks();
-                    const newData = await fetchCSV(URL_HORARIOS);
-                    if (newData) updateUI(newData);
-                }, 300000);
-
-                // Atualiza relógio e UI básica todo minuto
-                setInterval(() => {
-                    const now = new Date();
-                    document.getElementById('current-time').innerText = `${DAY_NAMES[now.getDay()]}, ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-                }, 60000);
+                setInterval(async () => { await updateTasks(); const d = await fetchCSV(URL_HORARIOS); if (d) updateUI(d); }, 300000);
+                setInterval(() => { if (isRealTime) updateUI(globalSheetData); }, 60000);
             }
         }
-
         init();
     </script>
 </body>
