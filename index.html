@@ -109,17 +109,26 @@
         }
 
         .presence-list li {
-            padding: 0.75rem 1rem;
+            padding: 1rem;
             background: rgba(255, 255, 255, 0.05);
-            margin-bottom: 0.5rem;
-            border-radius: 0.75rem;
+            margin-bottom: 0.75rem;
+            border-radius: 1rem;
             font-size: 1.1rem;
             display: flex;
-            align-items: center;
+            flex-direction: column;
+            align-items: flex-start;
             animation: fadeIn 0.5s ease forwards;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        .presence-list li::before {
+        .person-name {
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .person-name::before {
             content: "";
             width: 8px;
             height: 8px;
@@ -127,6 +136,33 @@
             border-radius: 50%;
             margin-right: 12px;
             box-shadow: 0 0 10px var(--accent);
+        }
+
+        .task-container {
+            width: 100%;
+            padding-left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .task-item {
+            font-size: 0.85rem;
+            color: var(--secondary);
+            line-height: 1.2;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            border-left: 2px solid var(--primary);
+        }
+
+        .project-tag {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--primary);
+            margin-right: 6px;
+            opacity: 0.8;
         }
 
         .loading {
@@ -176,38 +212,56 @@
         // URL da planilha publicada como CSV (Aba HORÁRIOS)
         // Link configurado para exportação CSV direta
         const SHEET_ID = '1NdSMN26GilAADXI8S4h9fmn9yiUUSEuJmwWlGMnjbzE';
-        const GID = '1651859946'; // GID da aba HORÁRIOS
-        const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
+        const GID_HORARIOS = '1651859946';
+        const GID_MONO = '766295141';
+        const GID_VW = '146544989';
 
-        // Mapeamento de colunas por dia (1-indexed based on CSV parsing)
-        // Seg: 1-8, Ter: 9-16, Qua: 17-24, Qui: 25-32, Sex: 33-39
-        const DAYS_MAP = {
-            1: [1, 9],  // Segunda
-            2: [9, 17], // Terça
-            3: [17, 25],// Quarta
-            4: [25, 33],// Quinta
-            5: [33, 40] // Sexta
-        };
+        const URL_HORARIOS = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_HORARIOS}`;
+        const URL_MONO = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_MONO}`;
+        const URL_VW = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID_VW}`;
 
+        const DAYS_MAP = { 1: [1, 9], 2: [9, 17], 3: [17, 25], 4: [25, 33], 5: [33, 40] };
         const DAY_NAMES = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 
-        async function fetchData() {
+        let cachedTasks = {}; // name -> [{task, project}]
+
+        async function fetchCSV(url) {
             try {
-                const response = await fetch(CSV_URL);
-                const data = await response.text();
-                return parseCSV(data);
+                const response = await fetch(url);
+                const csvText = await response.text();
+                const lines = csvText.split('\n');
+                return lines.map(line => {
+                    return line.split(',').map(cell => cell.replace(/"/g, '').trim());
+                });
             } catch (error) {
-                console.error("Erro ao carregar dados:", error);
-                document.getElementById('app-container').innerHTML = '<div class="loading">Erro ao conectar com o Google Sheets. Verifique a URL.</div>';
+                console.error("Erro ao carregar CSV:", url, error);
+                return null;
             }
         }
 
-        function parseCSV(csvText) {
-            const lines = csvText.split('\n');
-            return lines.map(line => {
-                // Handle basic CSV parsing (comma or semicolon)
-                return line.split(',').map(cell => cell.replace(/"/g, '').trim());
-            });
+        async function updateTasks() {
+            const [monoData, vwData] = await Promise.all([fetchCSV(URL_MONO), fetchCSV(URL_VW)]);
+            const taskMap = {};
+
+            const processTab = (data, projectName) => {
+                if (!data) return;
+                // As tarefas costumam começar na linha 10 (índice 9)
+                for (let i = 9; i < data.length; i++) {
+                    const taskDesc = data[i][2]; // Coluna C
+                    const responsibles = data[i][4]; // Coluna E
+                    if (taskDesc && responsibles && responsibles.toLowerCase() !== "responsavel") {
+                        const names = responsibles.split(',').map(n => n.trim());
+                        names.forEach(name => {
+                            if (!taskMap[name]) taskMap[name] = [];
+                            taskMap[name].push({ task: taskDesc, project: projectName });
+                        });
+                    }
+                }
+            };
+
+            processTab(monoData, "Bancada Mono");
+            processTab(vwData, "Bancada VW");
+            cachedTasks = taskMap;
         }
 
         function getPeopleForHour(data, weekday, hour) {
@@ -281,11 +335,25 @@
                     const li = document.createElement('li');
                     li.innerText = "Ninguém escalado";
                     li.style.opacity = "0.5";
+                    li.style.fontSize = "0.9rem";
                     ul.appendChild(li);
                 } else {
-                    people.forEach(p => {
+                    people.forEach(name => {
                         const li = document.createElement('li');
-                        li.innerText = p;
+
+                        let html = `<div class="person-name">${name}</div>`;
+
+                        // Busca atividades da pessoa no cache
+                        const tasks = cachedTasks[name] || [];
+                        if (tasks.length > 0) {
+                            html += '<div class="task-container">';
+                            tasks.forEach(t => {
+                                html += `<div class="task-item"><span class="project-tag">${t.project}</span> ${t.task}</div>`;
+                            });
+                            html += '</div>';
+                        }
+
+                        li.innerHTML = html;
                         ul.appendChild(li);
                     });
                 }
@@ -298,11 +366,23 @@
         }
 
         async function init() {
-            const data = await fetchData();
+            await updateTasks(); // Carrega atividades primeiro
+            const data = await fetchCSV(URL_HORARIOS);
             if (data) {
                 updateUI(data);
-                // Refresh data every hour, update clock every minute
-                setInterval(() => updateUI(data), 60000);
+
+                // Atualiza tudo (incluindo atividades) a cada 5 minutos
+                setInterval(async () => {
+                    await updateTasks();
+                    const newData = await fetchCSV(URL_HORARIOS);
+                    if (newData) updateUI(newData);
+                }, 300000);
+
+                // Atualiza relógio e UI básica todo minuto
+                setInterval(() => {
+                    const now = new Date();
+                    document.getElementById('current-time').innerText = `${DAY_NAMES[now.getDay()]}, ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+                }, 60000);
             }
         }
 
