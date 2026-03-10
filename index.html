@@ -382,22 +382,37 @@
             try {
                 const response = await fetch(url);
                 const csvText = await response.text();
-                // Divide por linha respeitando \n ou \r\n
-                const lines = csvText.split(/\r?\n/);
-                return lines.map(line => {
-                    const result = [];
-                    let cur = '', inQuote = false;
-                    for (let i = 0; i < line.length; i++) {
-                        const char = line[i];
-                        if (char === '"') inQuote = !inQuote;
-                        else if (char === ',' && !inQuote) {
-                            result.push(cur.trim());
-                            cur = '';
-                        } else cur += char;
+                const result = [];
+                let row = [];
+                let cur = '', inQuote = false;
+
+                for (let i = 0; i < csvText.length; i++) {
+                    const char = csvText[i];
+                    const nextChar = csvText[i + 1];
+
+                    if (char === '"') {
+                        if (inQuote && nextChar === '"') {
+                            cur += '"'; i++; // Aspas escapadas
+                        } else {
+                            inQuote = !inQuote;
+                        }
+                    } else if (char === ',' && !inQuote) {
+                        row.push(cur.trim());
+                        cur = '';
+                    } else if ((char === '\n' || char === '\r') && !inQuote) {
+                        if (char === '\r' && nextChar === '\n') i++;
+                        row.push(cur.trim());
+                        if (row.length > 1 || row[0] !== "") result.push(row);
+                        row = []; cur = '';
+                    } else {
+                        cur += char;
                     }
-                    result.push(cur.trim());
-                    return result.map(cell => cell.replace(/^"|"$/g, '').trim());
-                });
+                }
+                if (row.length > 0 || cur !== '') {
+                    row.push(cur.trim());
+                    result.push(row);
+                }
+                return result.map(r => r.map(cell => cell.replace(/^"|"$/g, '').trim()));
             } catch (error) {
                 console.error("Erro ao carregar CSV:", error);
                 return null;
@@ -409,18 +424,20 @@
             const taskMap = {};
             const processTab = (data, proj) => {
                 if (!data) return;
-                // Ignora o cabeçalho
-                for (let i = 1; i < data.length; i++) {
+                for (let i = 0; i < data.length; i++) {
                     const row = data[i];
                     if (row.length < 5) continue;
                     const task = row[2], resp = row[4];
-                    if (task && resp && resp.toLowerCase() !== "responsavel" && task.toLowerCase() !== "descrição da tarefa") {
-                        // Divide por vírgula e limpa nomes
+                    // Ignora cabeçalhos ou linhas inválidas
+                    if (task && resp &&
+                        resp.toLowerCase() !== "responsavel" &&
+                        task.toLowerCase() !== "descrição da tarefa" &&
+                        task.length > 1) {
+
                         resp.split(',').forEach(n => {
                             const name = n.trim().replace(/^"|"$/g, '').trim();
-                            if (name) {
+                            if (name && name.length > 1) {
                                 if (!taskMap[name]) taskMap[name] = [];
-                                // Evita duplicados
                                 if (!taskMap[name].find(t => t.task === task)) {
                                     taskMap[name].push({ task, project: proj });
                                 }
