@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -32,7 +33,7 @@
             align-items: center;
             padding: 2rem 1rem;
             background-image: radial-gradient(circle at top right, #1e3a8a, transparent),
-                              radial-gradient(circle at bottom left, #1e1b4b, transparent);
+                radial-gradient(circle at bottom left, #1e1b4b, transparent);
         }
 
         header {
@@ -137,20 +138,29 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         @media (max-width: 768px) {
             .container {
                 grid-template-columns: 1fr;
             }
+
             .column.active {
                 transform: scale(1);
             }
         }
     </style>
 </head>
+
 <body>
 
     <header>
@@ -166,7 +176,7 @@
         // URL da planilha publicada como CSV (Aba HORÁRIOS)
         // Link configurado para exportação CSV direta
         const SHEET_ID = '1NdSMN26GilAADXI8S4h9fmn9yiUUSEuJmwWlGMnjbzE';
-        const GID = '0'; // GID da aba HORÁRIOS
+        const GID = '1651859946'; // GID da aba HORÁRIOS
         const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
 
         // Mapeamento de colunas por dia (1-indexed based on CSV parsing)
@@ -202,15 +212,15 @@
 
         function getPeopleForHour(data, weekday, hour) {
             if (weekday < 1 || weekday > 5) return ["Fim de Semana"];
-            
+
             const [colStart, colEnd] = DAYS_MAP[weekday];
-            
+
             // Procura a linha da hora
             let rowData = null;
             for (let i = 0; i < data.length; i++) {
                 const timeCell = data[i][0];
                 if (!timeCell) continue;
-                
+
                 // Regex para pegar os números da hora na primeira célula (ex: "16 - 17" ou "16:00")
                 const hours = timeCell.match(/\d+/g);
                 if (hours && hours.length >= 2) {
@@ -240,8 +250,8 @@
             const now = new Date();
             const weekday = now.getDay(); // 0 is Sunday, 1 is Monday...
             const currentHour = now.getHours();
-            
-            document.getElementById('current-time').innerText = `${DAY_NAMES[weekday]}, ${now.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}`;
+
+            document.getElementById('current-time').innerText = `${DAY_NAMES[weekday]}, ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
             const hoursToReport = [
                 { label: 'HORA PASSADA', hour: (currentHour - 1), type: 'past' },
@@ -256,17 +266,17 @@
                 const people = getPeopleForHour(data, weekday, item.hour);
                 const col = document.createElement('div');
                 col.className = `column ${item.type === 'active' ? 'active' : ''}`;
-                
+
                 const h2 = document.createElement('h2');
                 h2.innerText = item.label;
-                
+
                 const span = document.createElement('span');
                 span.className = 'time-range';
                 span.innerText = `${item.hour.toString().padStart(2, '0')}:00 - ${(item.hour + 1).toString().padStart(2, '0')}:00`;
-                
+
                 const ul = document.createElement('ul');
                 ul.className = 'presence-list';
-                
+
                 if (people.length === 0 || people[0] === "-") {
                     const li = document.createElement('li');
                     li.innerText = "Ninguém escalado";
@@ -292,11 +302,12 @@
             if (data) {
                 updateUI(data);
                 // Refresh data every hour, update clock every minute
-                setInterval(() => updateUI(data), 60000); 
+                setInterval(() => updateUI(data), 60000);
             }
         }
 
         init();
     </script>
 </body>
+
 </html>
