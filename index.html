@@ -382,7 +382,22 @@
             try {
                 const response = await fetch(url);
                 const csvText = await response.text();
-                return csvText.split('\n').map(line => line.split(',').map(cell => cell.replace(/"/g, '').trim()));
+                // Divide por linha respeitando \n ou \r\n
+                const lines = csvText.split(/\r?\n/);
+                return lines.map(line => {
+                    const result = [];
+                    let cur = '', inQuote = false;
+                    for (let i = 0; i < line.length; i++) {
+                        const char = line[i];
+                        if (char === '"') inQuote = !inQuote;
+                        else if (char === ',' && !inQuote) {
+                            result.push(cur.trim());
+                            cur = '';
+                        } else cur += char;
+                    }
+                    result.push(cur.trim());
+                    return result.map(cell => cell.replace(/^"|"$/g, '').trim());
+                });
             } catch (error) {
                 console.error("Erro ao carregar CSV:", error);
                 return null;
@@ -394,12 +409,22 @@
             const taskMap = {};
             const processTab = (data, proj) => {
                 if (!data) return;
-                for (let i = 9; i < data.length; i++) {
-                    const task = data[i][2], resp = data[i][4];
-                    if (task && resp && resp.toLowerCase() !== "responsavel") {
-                        resp.split(',').map(n => n.trim()).forEach(name => {
-                            if (!taskMap[name]) taskMap[name] = [];
-                            taskMap[name].push({ task, project: proj });
+                // Ignora o cabeçalho
+                for (let i = 1; i < data.length; i++) {
+                    const row = data[i];
+                    if (row.length < 5) continue;
+                    const task = row[2], resp = row[4];
+                    if (task && resp && resp.toLowerCase() !== "responsavel" && task.toLowerCase() !== "descrição da tarefa") {
+                        // Divide por vírgula e limpa nomes
+                        resp.split(',').forEach(n => {
+                            const name = n.trim().replace(/^"|"$/g, '').trim();
+                            if (name) {
+                                if (!taskMap[name]) taskMap[name] = [];
+                                // Evita duplicados
+                                if (!taskMap[name].find(t => t.task === task)) {
+                                    taskMap[name].push({ task, project: proj });
+                                }
+                            }
                         });
                     }
                 }
