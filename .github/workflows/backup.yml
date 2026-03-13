@@ -1,0 +1,52 @@
+name: Backup Supabase
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Todo dia às 03:00 UTC (00:00 horário de Brasília)
+  workflow_dispatch:      # Permite rodar manualmente pelo GitHub
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Buscar dados do Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          mkdir -p backups
+
+          DATE=$(date +"%Y-%m-%d")
+
+          for TABLE in bolsistas projetos tarefas escalas; do
+            curl -s \
+              -H "apikey: $SUPABASE_KEY" \
+              -H "Authorization: Bearer $SUPABASE_KEY" \
+              "$SUPABASE_URL/rest/v1/$TABLE?select=*" \
+              -o "backups/${TABLE}.json"
+            echo "Backup de $TABLE concluído"
+          done
+
+          # Arquivo consolidado com data
+          jq -n \
+            --slurpfile bolsistas backups/bolsistas.json \
+            --slurpfile projetos backups/projetos.json \
+            --slurpfile tarefas backups/tarefas.json \
+            --slurpfile escalas backups/escalas.json \
+            '{date: "'$DATE'", bolsistas: $bolsistas[0], projetos: $projetos[0], tarefas: $tarefas[0], escalas: $escalas[0]}' \
+            > "backups/backup_${DATE}.json"
+
+          # Manter apenas os 30 backups mais recentes
+          ls -t backups/backup_*.json | tail -n +31 | xargs -r rm
+
+      - name: Commit e push do backup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backups/
+          git diff --staged --quiet || git commit -m "Backup automático $(date +"%Y-%m-%d")"
+          git push
