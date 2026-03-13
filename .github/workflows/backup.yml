@@ -5,6 +5,9 @@ on:
     - cron: '0 3 * * *'  # Todo dia às 03:00 UTC (00:00 horário de Brasília)
   workflow_dispatch:      # Permite rodar manualmente pelo GitHub
 
+permissions:
+  contents: write
+
 jobs:
   backup:
     runs-on: ubuntu-latest
