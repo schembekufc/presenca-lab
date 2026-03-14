@@ -331,6 +331,16 @@
             </div>
         </div>
 
+        <div class="admin-section-divider">Quadro de Avisos (Global)</div>
+        <div style="background: rgba(255, 255, 255, 0.03); padding: 1.5rem; border-radius: 1rem; border: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 2rem;">
+            <div class="form-group">
+                <label>Texto do Aviso</label>
+                <input type="text" id="global-notice-input" placeholder="Ex: Reunião geral amanhã às 14h no Lab.">
+                <p style="font-size: 0.7rem; color: var(--secondary); margin-top: 5px;">Deixe em branco para ocultar o quadro de avisos na página principal.</p>
+            </div>
+            <button class="btn-action" id="save-notice-btn">Atualizar Aviso</button>
+        </div>
+
         <div class="admin-section-divider">Tarefas Ativas</div>
         <div id="tasks-active" class="task-list"></div>
 
@@ -405,6 +415,10 @@
             
             const grid = document.getElementById('admin-schedule-grid');
             grid.innerHTML = '<div style="grid-column: span 6; text-align: center; padding: 20px; font-size: 0.8rem; opacity: 0.5;">Selecione um bolsista acima para editar a escala.</div>';
+
+            // Carregar aviso global
+            const { data: notice } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_principal').single();
+            if (notice) document.getElementById('global-notice-input').value = notice.valor;
 
             // Definir data padrão de início como hoje
             document.getElementById('task-start').value = new Date().toISOString().split('T')[0];
@@ -733,6 +747,16 @@
         document.getElementById('save-task-btn').onclick = saveTask;
         document.getElementById('cancel-edit-btn').onclick = cancelEdit;
         document.getElementById('finish-task-btn').onclick = finishTask;
+
+        document.getElementById('save-notice-btn').onclick = async () => {
+            const val = document.getElementById('global-notice-input').value.trim();
+            try {
+                const { error } = await supabaseClient.from('configuracoes')
+                    .upsert({ chave: 'aviso_principal', valor: val }, { onConflict: 'chave' });
+                if (error) throw error;
+                alert("Aviso atualizado com sucesso!");
+            } catch (e) { alert("Erro ao salvar aviso: " + e.message); }
+        };
 
         async function init() {
             await loadData();

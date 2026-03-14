@@ -280,7 +280,7 @@
         .status-urgente .task-deadline { color: #f59e0b; }
         
         .status-em-dia { border-left-color: #22c55e !important; } /* Verde */
-        .status-em-dia .task-deadline { color: #22c55e; }
+        .status-em-dia .task-deadline { color: #cbd5e1; }
         
         .status-sem-prazo { border-left-color: #38bdf8 !important; } /* Azul */
         .status-sem-prazo .task-deadline { color: var(--primary); }
@@ -293,9 +293,9 @@
             margin-right: 6px;
             text-transform: uppercase;
         }
-        .priority-alta { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
-        .priority-media { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
-        .priority-baixa { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e; }
+        .priority-alta { background: rgba(239, 68, 68, 0.2); color: #fee2e2; border: 1px solid #ef4444; }
+        .priority-media { background: rgba(245, 158, 11, 0.2); color: #fef3c7; border: 1px solid #f59e0b; }
+        .priority-baixa { background: rgba(34, 197, 94, 0.2); color: #dcfce7; border: 1px solid #22c55e; }
 
         .project-tag {
             font-size: 0.8rem;
@@ -433,13 +433,73 @@
             outline: none;
         }
 
+        /* Notice Board */
+        .notice-container {
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 2rem;
+            animation: fadeIn 0.8s ease;
+        }
+
+        .notice-card {
+            background: rgba(245, 158, 11, 0.1);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 1rem;
+            padding: 1.2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .notice-icon {
+            background: #f59e0b;
+            color: #0f172a;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+            animation: pulse-notice 2s infinite;
+        }
+
+        .notice-content {
+            flex: 1;
+        }
+
+        .notice-title {
+            color: #fbbf24;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .notice-text {
+            font-size: 0.95rem;
+            line-height: 1.4;
+            color: #cbd5e1;
+        }
+
+        @keyframes pulse-notice {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+
     </style>
 </head>
 
 <body>
 
     <header>
-        <h1>Atividades dos Bolsistas - Lab 718<span id="mode-badge" class="status-badge badge-live">LIVE</span></h1>
+        <h1>Atividades dos Bolsistas - Lab 718</h1>
         <p id="current-time">Carregando...</p>
     </header>
 
@@ -467,6 +527,16 @@
 
     <div class="container" id="app-container">
         <div class="loading">Sincronizando com Google Sheets...</div>
+    </div>
+
+    <div class="notice-container" id="notice-board" style="display: none; margin-top: 1rem;">
+        <div class="notice-card">
+            <div class="notice-icon">📢</div>
+            <div class="notice-content">
+                <div class="notice-title">Quadro de Avisos</div>
+                <div class="notice-text" id="notice-text">Carregando avisos...</div>
+            </div>
+        </div>
     </div>
 
     <!-- Modal Horário Individual -->
@@ -502,7 +572,6 @@
         const selectDay = document.getElementById('select-day');
         const selectHour = document.getElementById('select-hour');
         const btnToggle = document.getElementById('toggle-mode');
-        const modeBadge = document.getElementById('mode-badge');
 
         for (let i = 8; i <= 20; i++) {
             const opt = document.createElement('option');
@@ -515,17 +584,23 @@
             if (isRealTime) {
                 btnToggle.className = "btn-mode btn-realtime";
                 btnToggle.innerText = "Modo: Real-Time";
-                modeBadge.className = "status-badge badge-live";
-                modeBadge.innerText = "LIVE";
             } else {
                 btnToggle.className = "btn-mode btn-consult";
                 btnToggle.innerText = "Voltar ao Real-Time";
-                modeBadge.className = "status-badge badge-manual";
-                modeBadge.innerText = "CONSULTA";
             }
         }
 
         async function loadData() {
+            // Carregar aviso
+            const { data: notices } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_principal').single();
+            const noticeBoard = document.getElementById('notice-board');
+            if (notices && notices.valor) {
+                document.getElementById('notice-text').innerText = notices.valor;
+                noticeBoard.style.display = 'block';
+            } else {
+                noticeBoard.style.display = 'none';
+            }
+
             const { data: projs } = await supabaseClient.from('projetos').select('*').order('nome');
             projectsList = projs || [];
             
