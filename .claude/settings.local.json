@@ -10,7 +10,17 @@
       "Bash(git checkout master)",
       "Bash(git merge database-version)",
       "Bash(git push origin master)",
-      "Bash(git add index.html)"
+      "Bash(git add index.html)",
+      "Bash(gh secret list --repo schembekufc/presenca-lab)",
+      "Bash(gh secret set SUPABASE_URL --body \"https://vnodbsefjwvapvtdzgdl.supabase.co\" --repo schembekufc/presenca-lab)",
+      "Bash(gh secret set SUPABASE_KEY --body \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZub2Ric2Vmand2YXB2dGR6Z2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzI5NTMsImV4cCI6MjA4ODk0ODk1M30.M-7v57-obulKagTn-p5Pp6oKJWwcuu5FIvSLJ6andvs\" --repo schembekufc/presenca-lab)",
+      "Bash(git add .github/workflows/backup.yml)",
+      "Bash(gh run list --workflow=backup.yml --repo schembekufc/presenca-lab)",
+      "Bash(git pull --rebase origin master)",
+      "Bash(git stash)",
+      "Bash(git stash pop)",
+      "Bash(ls -lh /d/Antigravity/presenca-lab/*.html /d/Antigravity/presenca-lab/*.js /d/Antigravity/presenca-lab/*.py)",
+      "Bash(start \"\" python -m http.server 8080)"
     ]
   }
 }
