@@ -580,6 +580,8 @@
 
     <script>        const SUPABASE_URL = 'https://vnodbsefjwvapvtdzgdl.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZub2Ric2Vmand2YXB2dGR6Z2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzI5NTMsImV4cCI6MjA4ODk0ODk1M30.M-7v57-obulKagTn-p5Pp6oKJWwcuu5FIvSLJ6andvs';
+        const ADMIN_EMAIL = 'schembek.ai@gmail.com';
+        const ADMIN_PASSWORD = 'F26o,7U6\\';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const DAY_NAMES = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
@@ -853,8 +855,21 @@
             pendingPinCallback = null;
         }
 
-        function submitPin() {
+        async function submitPin() {
             if (document.getElementById('pin-input').value === '0718') {
+                const btn = document.querySelector('#pin-modal button[onclick="submitPin()"]');
+                if (btn) { btn.disabled = true; btn.textContent = 'Entrando...'; }
+                const { error } = await supabaseClient.auth.signInWithPassword({
+                    email: ADMIN_EMAIL,
+                    password: ADMIN_PASSWORD
+                });
+                if (error) {
+                    const errEl = document.getElementById('pin-error');
+                    errEl.textContent = 'Erro de autenticação: ' + error.message;
+                    errEl.style.display = 'block';
+                    if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+                    return;
+                }
                 isAdminAuthenticated = true;
                 sessionStorage.setItem('isAdminAuthenticated', 'true');
                 document.getElementById('pin-modal').style.display = 'none';

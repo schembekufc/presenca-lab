@@ -400,6 +400,8 @@
     <script>
         const SUPABASE_URL = 'https://vnodbsefjwvapvtdzgdl.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZub2Ric2Vmand2YXB2dGR6Z2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzI5NTMsImV4cCI6MjA4ODk0ODk1M30.M-7v57-obulKagTn-p5Pp6oKJWwcuu5FIvSLJ6andvs';
+        const ADMIN_EMAIL = 'schembek.ai@gmail.com';
+        const ADMIN_PASSWORD = 'F26o,7U6\\';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         function confirmModal(message, confirmText = 'Confirmar', confirmStyle = '') {
@@ -461,16 +463,30 @@
             }
         }
 
-        loginBtn.onclick = () => {
+        loginBtn.onclick = async () => {
             if (passInput.value === '0718') {
-                sessionStorage.setItem('isAdminAuthenticated', 'true');
-                checkAuth();
+                loginBtn.disabled = true;
+                loginBtn.textContent = 'Entrando...';
+                const { error } = await supabaseClient.auth.signInWithPassword({
+                    email: ADMIN_EMAIL,
+                    password: ADMIN_PASSWORD
+                });
+                if (error) {
+                    passError.textContent = 'Erro de autenticação: ' + error.message;
+                    passError.style.display = 'block';
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'Entrar';
+                } else {
+                    sessionStorage.setItem('isAdminAuthenticated', 'true');
+                    checkAuth();
+                }
             } else {
                 passError.style.display = 'block';
             }
         };
 
         function logout() {
+            supabaseClient.auth.signOut();
             sessionStorage.removeItem('isAdminAuthenticated');
             document.getElementById('admin-content').style.display = 'none';
             document.getElementById('login-screen').style.display = 'block';
