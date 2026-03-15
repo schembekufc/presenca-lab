@@ -493,6 +493,29 @@
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
         }
 
+        /* Toast Notifications */
+        #toast-container { position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%); z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+        .toast { padding:0.75rem 1.25rem; border-radius:0.75rem; font-size:0.9rem; font-weight:600; backdrop-filter:blur(12px); max-width:340px; text-align:center; animation:toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards; }
+        .toast-success { background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.4); color:#22c55e; }
+        .toast-error   { background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; }
+        .toast-warn    { background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); color:#f59e0b; }
+        @keyframes toastIn  { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+        @keyframes toastOut { from{opacity:1;} to{opacity:0;} }
+
+        /* Botões de ação nas tarefas */
+        .task-item { position: relative !important; padding-right: 50px !important; }
+        .btn-task-edit, .btn-task-complete { position:absolute; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:0.75rem; opacity:0.2; padding:3px; transition:opacity 0.2s; line-height:1; }
+        .btn-task-edit { right:4px; }
+        .btn-task-complete { right:26px; color:#22c55e; font-weight:bold; font-size:0.9rem; }
+        .task-item:hover .btn-task-edit,
+        .task-item:hover .btn-task-complete { opacity:0.8; }
+        .btn-task-edit:hover, .btn-task-complete:hover { opacity:1 !important; }
+
+        /* Modal de edição de tarefa */
+        .edit-label { font-size:0.8rem; color:var(--secondary); display:block; margin-bottom:0.3rem; }
+        .edit-input { width:100%; background:#0f172a; color:var(--text); border:1px solid rgba(255,255,255,0.15); border-radius:0.5rem; padding:0.5rem 0.7rem; font-family:inherit; font-size:0.9rem; outline:none; }
+        .edit-input:focus { border-color:var(--primary); }
+
     </style>
 </head>
 
@@ -718,7 +741,7 @@
                             let deadlineHtml = t.prazo ? `<div class="task-deadline">📅 Prazo: ${new Date(t.prazo + 'T12:00:00').toLocaleDateString('pt-BR')}</div>` : '';
                             let priorityHtml = `<span class="priority-tag priority-${t.prioridade || 'media'}">${sanitize(t.prioridade || 'média')}</span>`;
 
-                            return `<div class="task-item ${statusClass}">${priorityHtml}<span class="project-tag">${sanitize(t.projetos.nome)}</span> ${sanitize(t.descricao)}${deadlineHtml}</div>`;
+                            return `<div class="task-item ${statusClass}"><button class="btn-task-complete" onclick="requestCompleteTask('${t.id}')" title="Concluir tarefa">✓</button><button class="btn-task-edit" onclick="requestEditTask('${t.id}')" title="Editar tarefa">✏️</button>${priorityHtml}<span class="project-tag">${sanitize(t.projetos.nome)}</span> ${sanitize(t.descricao)}${deadlineHtml}</div>`;
                         }).join('') + '</div>';
                     }
                     li.innerHTML = html; ul.appendChild(li);
@@ -784,11 +807,219 @@
             }
         }
 
+        // Toast
+        function toast(message, type = 'success') {
+            let c = document.getElementById('toast-container');
+            if (!c) { c = document.createElement('div'); c.id = 'toast-container'; document.body.appendChild(c); }
+            const el = document.createElement('div');
+            el.className = `toast toast-${type}`;
+            el.textContent = message;
+            c.appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+
+        // Modal de confirmação
+        function confirmModal(message, confirmText = 'Confirmar', confirmStyle = '') {
+            return new Promise(resolve => {
+                const modal = document.getElementById('confirm-modal-index');
+                document.getElementById('confirm-message-index').textContent = message;
+                const okBtn = document.getElementById('confirm-ok-index');
+                okBtn.textContent = confirmText;
+                okBtn.style.cssText = confirmStyle || '';
+                modal.style.display = 'flex';
+                const close = (result) => { modal.style.display = 'none'; resolve(result); };
+                okBtn.onclick = () => close(true);
+                document.getElementById('confirm-cancel-index').onclick = () => close(false);
+            });
+        }
+
+        // PIN + Edição/Conclusão de tarefa
+        let pendingPinCallback = null;
+
+        function requestEditTask(taskId) {
+            if (isAdminAuthenticated) {
+                openTaskEditModal(taskId);
+            } else {
+                pendingPinCallback = () => openTaskEditModal(taskId);
+                document.getElementById('pin-input').value = '';
+                document.getElementById('pin-error').style.display = 'none';
+                document.getElementById('pin-modal').style.display = 'flex';
+                setTimeout(() => document.getElementById('pin-input').focus(), 50);
+            }
+        }
+
+        function closePinModal() {
+            document.getElementById('pin-modal').style.display = 'none';
+            pendingPinCallback = null;
+        }
+
+        function submitPin() {
+            if (document.getElementById('pin-input').value === '0718') {
+                isAdminAuthenticated = true;
+                sessionStorage.setItem('isAdminAuthenticated', 'true');
+                document.getElementById('pin-modal').style.display = 'none';
+                if (pendingPinCallback) { pendingPinCallback(); pendingPinCallback = null; }
+            } else {
+                document.getElementById('pin-error').style.display = 'block';
+            }
+        }
+
+        function openTaskEditModal(taskId) {
+            const task = cachedTasks.find(t => t.id === taskId);
+            if (!task) return;
+            editingTaskId = taskId;
+
+            const projSel = document.getElementById('edit-task-project');
+            projSel.innerHTML = '<option value="">-- Selecione --</option>' +
+                projectsList.map(p => `<option value="${p.id}" ${p.id === task.projeto_id ? 'selected' : ''}>${sanitize(p.nome)}</option>`).join('');
+
+            document.getElementById('edit-task-desc').value = task.descricao || '';
+            document.getElementById('edit-task-start').value = task.data_inicio || '';
+            document.getElementById('edit-task-deadline').value = task.prazo || '';
+            document.getElementById('edit-task-priority').value = task.prioridade || 'media';
+
+            const respsContainer = document.getElementById('edit-task-resps');
+            respsContainer.innerHTML = allParticipants.map(p => `
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:3px 0;font-size:0.9rem;">
+                    <input type="checkbox" value="${sanitize(p.nome)}" ${task.responsaveis?.includes(p.nome) ? 'checked' : ''} style="width:auto;"> ${sanitize(p.nome)}
+                </label>
+            `).join('');
+
+            document.getElementById('task-edit-modal').style.display = 'flex';
+        }
+
+        function requestCompleteTask(taskId) {
+            if (isAdminAuthenticated) {
+                completeTaskFlow(taskId);
+            } else {
+                pendingPinCallback = () => completeTaskFlow(taskId);
+                document.getElementById('pin-input').value = '';
+                document.getElementById('pin-error').style.display = 'none';
+                document.getElementById('pin-modal').style.display = 'flex';
+                setTimeout(() => document.getElementById('pin-input').focus(), 50);
+            }
+        }
+
+        async function completeTaskFlow(taskId) {
+            const task = cachedTasks.find(t => t.id === taskId);
+            const desc = task?.descricao || '';
+            if (!await confirmModal(`Marcar como concluída?\n"${desc}"`, 'Concluir', 'background:var(--accent); color:white; flex:1;')) return;
+            try {
+                const { error } = await supabaseClient.from('tarefas').update({ status: 'concluida' }).eq('id', taskId);
+                if (error) throw error;
+                toast('Tarefa concluída!');
+                await updateTasks();
+                await updateUI();
+            } catch(e) {
+                toast('Erro: ' + e.message, 'error');
+            }
+        }
+
+        function closeTaskEditModal() {
+            document.getElementById('task-edit-modal').style.display = 'none';
+            editingTaskId = null;
+        }
+
+        async function saveEditedTask() {
+            const projeto_id = document.getElementById('edit-task-project').value;
+            const descricao = document.getElementById('edit-task-desc').value.trim();
+            const resps = Array.from(document.querySelectorAll('#edit-task-resps input:checked')).map(cb => cb.value);
+            const data_inicio = document.getElementById('edit-task-start').value;
+            const prazo = document.getElementById('edit-task-deadline').value || null;
+            const prioridade = document.getElementById('edit-task-priority').value;
+
+            if (!projeto_id) return toast('Selecione um projeto!', 'warn');
+            if (!descricao) return toast('Preencha a descrição!', 'warn');
+            if (resps.length === 0) return toast('Selecione ao menos um responsável!', 'warn');
+
+            const btn = document.getElementById('edit-save-btn');
+            btn.disabled = true; btn.textContent = 'Salvando...';
+            try {
+                const { error } = await supabaseClient.from('tarefas')
+                    .update({ projeto_id, descricao, responsaveis: resps, data_inicio, prazo, prioridade })
+                    .eq('id', editingTaskId);
+                if (error) throw error;
+                toast('Tarefa atualizada!');
+                closeTaskEditModal();
+                await updateTasks();
+                await updateUI();
+            } catch(e) {
+                toast('Erro: ' + e.message, 'error');
+                btn.disabled = false; btn.textContent = 'Salvar';
+            }
+        }
+
         init();
     </script>
-</body>
-</html>
-    </script>
-</body>
 
+    <!-- Modal de Confirmação -->
+    <div id="confirm-modal-index" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.88); backdrop-filter:blur(8px); z-index:3100; align-items:center; justify-content:center; padding:1rem;">
+        <div style="background:var(--card-bg); border:1px solid rgba(255,255,255,0.1); border-radius:1.2rem; padding:1.8rem 1.5rem; width:100%; max-width:340px; text-align:center;">
+            <p id="confirm-message-index" style="font-size:1rem; margin-bottom:1.5rem; line-height:1.5; color:var(--text); white-space:pre-line;"></p>
+            <div style="display:flex; gap:10px;">
+                <button id="confirm-cancel-index" style="flex:1; padding:0.7rem; border-radius:0.5rem; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:var(--text); cursor:pointer; font-family:inherit; font-weight:600;">Cancelar</button>
+                <button id="confirm-ok-index" style="flex:1; padding:0.7rem; border-radius:0.5rem; border:none; cursor:pointer; font-family:inherit; font-weight:700;">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PIN Modal -->
+    <div id="pin-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.9); backdrop-filter:blur(8px); z-index:3000; align-items:center; justify-content:center; padding:1rem;">
+        <div style="background:var(--card-bg); border:1px solid rgba(255,255,255,0.1); border-radius:1.2rem; padding:1.8rem 1.5rem; width:100%; max-width:300px; text-align:center;">
+            <p style="font-size:1rem; margin-bottom:1rem; color:var(--text); font-weight:600;">PIN de Administrador</p>
+            <input type="password" id="pin-input" placeholder="Digite o PIN" autocomplete="current-password"
+                class="edit-input" style="text-align:center; letter-spacing:0.3rem; font-size:1.2rem;"
+                onkeydown="if(event.key==='Enter') submitPin()">
+            <p id="pin-error" style="color:#ef4444; font-size:0.8rem; display:none; margin-top:0.5rem;">PIN incorreto!</p>
+            <div style="display:flex; gap:10px; margin-top:1rem;">
+                <button onclick="closePinModal()" style="flex:1; padding:0.6rem; border-radius:0.5rem; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:var(--text); cursor:pointer; font-family:inherit; font-weight:600;">Cancelar</button>
+                <button onclick="submitPin()" style="flex:1; padding:0.6rem; border-radius:0.5rem; border:none; background:var(--primary); color:#0f172a; font-weight:700; cursor:pointer; font-family:inherit;">Entrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Edição de Tarefa -->
+    <div id="task-edit-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.9); backdrop-filter:blur(8px); z-index:3000; align-items:flex-start; justify-content:center; padding:1.5rem; overflow-y:auto;">
+        <div style="background:var(--card-bg); border:1px solid rgba(255,255,255,0.1); border-radius:1.2rem; padding:1.8rem 1.5rem; width:100%; max-width:420px; margin:auto;">
+            <h3 style="color:var(--primary); margin-bottom:1.5rem; font-size:1.1rem;">Editar Tarefa</h3>
+            <div style="display:flex; flex-direction:column; gap:1rem;">
+                <div>
+                    <label class="edit-label">Projeto</label>
+                    <select id="edit-task-project" class="edit-input"></select>
+                </div>
+                <div>
+                    <label class="edit-label">Descrição</label>
+                    <textarea id="edit-task-desc" rows="3" class="edit-input" style="resize:vertical;"></textarea>
+                </div>
+                <div>
+                    <label class="edit-label">Responsáveis</label>
+                    <div id="edit-task-resps" style="background:#0f172a; border:1px solid rgba(255,255,255,0.15); border-radius:0.5rem; padding:0.5rem; max-height:130px; overflow-y:auto;"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+                    <div>
+                        <label class="edit-label">Início</label>
+                        <input type="date" id="edit-task-start" class="edit-input">
+                    </div>
+                    <div>
+                        <label class="edit-label">Prazo</label>
+                        <input type="date" id="edit-task-deadline" class="edit-input">
+                    </div>
+                </div>
+                <div>
+                    <label class="edit-label">Prioridade</label>
+                    <select id="edit-task-priority" class="edit-input">
+                        <option value="alta">Alta</option>
+                        <option value="media">Média</option>
+                        <option value="baixa">Baixa</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:1.5rem;">
+                <button onclick="closeTaskEditModal()" style="flex:1; padding:0.7rem; border-radius:0.5rem; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:var(--text); cursor:pointer; font-family:inherit; font-weight:600;">Cancelar</button>
+                <button id="edit-save-btn" onclick="saveEditedTask()" style="flex:1; padding:0.7rem; border-radius:0.5rem; border:none; background:var(--accent); color:white; cursor:pointer; font-family:inherit; font-weight:700;">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+</body>
 </html>
