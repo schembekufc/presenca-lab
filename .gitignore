@@ -26,3 +26,6 @@ Thumbs.db
 
 # Credenciais locais (use config.example.js como template)
 config.js
+
+# Backups de dados (contêm dados reais)
+backups/
