@@ -1,0 +1,28 @@
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Configurações locais do Claude Code (podem conter credenciais)
+.claude/settings.local.json
+
+# Credenciais locais (use config.example.js como template)
+config.js

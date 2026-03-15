@@ -249,6 +249,34 @@
         .grid-cell.pending-add { background: #f59e0b; color: white; border-color: #f59e0b; animation: pulse 1.5s infinite; }
         .grid-cell.pending-remove { background: #ef4444; color: white; border-color: #ef4444; text-decoration: line-through; }
         .grid-cell.loading { opacity: 0.5; pointer-events: none; }
+
+        /* Toast Notifications */
+        #toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            backdrop-filter: blur(12px);
+            max-width: 340px;
+            text-align: center;
+            animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
+        }
+        .toast-success { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.4); color: #22c55e; }
+        .toast-error   { background: rgba(239,68,68,0.15);  border: 1px solid rgba(239,68,68,0.4);  color: #ef4444; }
+        .toast-warn    { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: #f59e0b; }
+        @keyframes toastIn  { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes toastOut { from { opacity:1; } to { opacity:0; } }
     </style>
 </head>
 <body>
@@ -256,14 +284,15 @@
     <div class="header-nav">
         <a href="index.html" class="btn-back">← Voltar ao Painel</a>
         <h1>Administração</h1>
+        <button id="logout-btn" onclick="logout()" style="display:none; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.3); padding:6px 14px; border-radius:8px; cursor:pointer; font-size:0.85rem; font-weight:600;">Sair</button>
     </div>
 
     <!-- Tela de Login -->
     <div id="login-screen" class="container">
         <h3>Acesso Restrito</h3>
         <div class="form-group">
-            <input type="password" id="admin-pass" placeholder="Senha de Acesso">
-            <p id="pass-error">Senha incorreta!</p>
+            <input type="password" id="admin-pass" placeholder="PIN de Acesso" autocomplete="current-password">
+            <p id="pass-error" style="color:#ef4444; font-size:0.85rem; margin-top:0.5rem; display:none;">PIN incorreto!</p>
         </div>
         <button class="btn-action" id="login-btn">Entrar</button>
     </div>
@@ -326,7 +355,7 @@
             <p style="font-size: 0.7rem; color: var(--secondary); margin-bottom: 0.5rem; text-align: center;">Clique nos blocos para adicionar ou remover horários</p>
             <div class="schedule-grid-wrapper"><div id="admin-schedule-grid" class="schedule-grid"></div></div>
             <div id="schedule-save-container" style="display:none; margin-top: 1.5rem; gap: 10px;">
-                <button class="btn-action" onclick="saveBolsistaSchedule()" style="background: var(--accent); color: white;">Confirmar Alterações de Horário</button>
+                <button class="btn-action" id="btn-save-escala" onclick="saveBolsistaSchedule(this)" style="background: var(--accent); color: white;">Confirmar Alterações de Horário</button>
                 <button class="btn-action btn-secondary" onclick="loadBolsistaSchedule()" style="margin-top:0;">Descartar Rascunho</button>
             </div>
         </div>
@@ -341,10 +370,11 @@
             <button class="btn-action" id="save-notice-btn">Atualizar Aviso</button>
         </div>
 
-        <div class="admin-section-divider">Tarefas Ativas</div>
+        <div class="admin-section-divider">Tarefas Ativas <span id="badge-ativas" style="background:var(--primary);color:#0f172a;border-radius:12px;padding:1px 8px;font-size:0.75rem;margin-left:6px;">0</span></div>
+        <input type="text" id="task-search" placeholder="Filtrar por descrição ou projeto..." oninput="filterTasks(this.value)" style="margin-bottom:1rem;">
         <div id="tasks-active" class="task-list"></div>
 
-        <div class="admin-section-divider">Concluídas Recentemente</div>
+        <div class="admin-section-divider">Concluídas Recentemente <span id="badge-concluidas" style="background:rgba(255,255,255,0.1);color:var(--secondary);border-radius:12px;padding:1px 8px;font-size:0.75rem;margin-left:6px;">0</span></div>
         <div id="tasks-finished" class="task-list" style="opacity: 0.6;"></div>
 
         <div style="margin-top: 2rem; text-align: center;">
@@ -356,10 +386,55 @@
         </div>
     </div>
 
+    <!-- Modal de Confirmação -->
+    <div id="confirm-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.88); backdrop-filter:blur(8px); z-index:2000; align-items:center; justify-content:center; padding:1rem;">
+        <div style="background:var(--card-bg); border:1px solid rgba(255,255,255,0.1); border-radius:1.2rem; padding:1.8rem 1.5rem; width:100%; max-width:340px; text-align:center; animation:toastIn 0.2s ease;">
+            <p id="confirm-message" style="font-size:1rem; margin-bottom:1.5rem; line-height:1.5; color:var(--text);"></p>
+            <div style="display:flex; gap:10px;">
+                <button id="confirm-cancel" class="btn-action btn-secondary" style="flex:1;">Cancelar</button>
+                <button id="confirm-ok" class="btn-action" style="flex:1;">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_URL = 'https://vnodbsefjwvapvtdzgdl.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZub2Ric2Vmand2YXB2dGR6Z2RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzI5NTMsImV4cCI6MjA4ODk0ODk1M30.M-7v57-obulKagTn-p5Pp6oKJWwcuu5FIvSLJ6andvs';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        function confirmModal(message, confirmText = 'Confirmar', confirmStyle = '') {
+            return new Promise(resolve => {
+                const modal = document.getElementById('confirm-modal');
+                document.getElementById('confirm-message').textContent = message;
+                const okBtn = document.getElementById('confirm-ok');
+                okBtn.textContent = confirmText;
+                okBtn.style.cssText = confirmStyle || '';
+                modal.style.display = 'flex';
+                const close = (result) => { modal.style.display = 'none'; resolve(result); };
+                okBtn.onclick = () => close(true);
+                document.getElementById('confirm-cancel').onclick = () => close(false);
+            });
+        }
+
+        function toast(message, type = 'success') {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                document.body.appendChild(container);
+            }
+            const el = document.createElement('div');
+            el.className = `toast toast-${type}`;
+            el.textContent = message;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+
+        function sanitize(str) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(str ?? ''));
+            return div.innerHTML;
+        }
 
         let activeTasks = [];
         let finishedTasks = [];
@@ -369,7 +444,7 @@
         let pendingScales = [];  // Rascunho local sugerido
         let projectsList = [];
         let editingTaskId = null;
-        let isAuthenticated = sessionStorage.getItem('isAdminAuthenticated') === 'true';
+        let taskFilter = '';
 
         // Login Logic
         const loginBtn = document.getElementById('login-btn');
@@ -377,22 +452,31 @@
         const passError = document.getElementById('pass-error');
 
         function checkAuth() {
+            const isAuthenticated = sessionStorage.getItem('isAdminAuthenticated') === 'true';
             if (isAuthenticated) {
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('admin-content').style.display = 'block';
+                document.getElementById('logout-btn').style.display = 'block';
                 init();
             }
         }
 
         loginBtn.onclick = () => {
             if (passInput.value === '0718') {
-                isAuthenticated = true;
                 sessionStorage.setItem('isAdminAuthenticated', 'true');
                 checkAuth();
             } else {
                 passError.style.display = 'block';
             }
         };
+
+        function logout() {
+            sessionStorage.removeItem('isAdminAuthenticated');
+            document.getElementById('admin-content').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'block';
+            document.getElementById('logout-btn').style.display = 'none';
+            passInput.value = '';
+        }
 
         passInput.onkeydown = (e) => { if (e.key === 'Enter') loginBtn.click(); };
 
@@ -401,7 +485,7 @@
             const { data: projs } = await supabaseClient.from('projetos').select('*').order('nome');
             projectsList = projs || [];
             const select = document.getElementById('task-project');
-            select.innerHTML = '<option value="">-- Selecione um projeto --</option>' + projectsList.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+            select.innerHTML = '<option value="">-- Selecione um projeto --</option>' + projectsList.map(p => `<option value="${p.id}">${sanitize(p.nome)}</option>`).join('');
             select.innerHTML += '<option value="NEW_PROJECT">+ Novo Projeto...</option>';
 
             const { data: parts } = await supabaseClient.from('bolsistas').select('*').order('nome');
@@ -410,8 +494,8 @@
 
             // Popular select de horários
             const schedSelect = document.getElementById('schedule-bolsista-select');
-            schedSelect.innerHTML = '<option value="">-- Selecione um bolsista --</option>' + 
-                allParticipants.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+            schedSelect.innerHTML = '<option value="">-- Selecione um bolsista --</option>' +
+                allParticipants.map(p => `<option value="${p.id}">${sanitize(p.nome)}</option>`).join('');
             
             const grid = document.getElementById('admin-schedule-grid');
             grid.innerHTML = '<div style="grid-column: span 6; text-align: center; padding: 20px; font-size: 0.8rem; opacity: 0.5;">Selecione um bolsista acima para editar a escala.</div>';
@@ -487,10 +571,11 @@
             renderScheduleGrid();
         }
 
-        async function saveBolsistaSchedule() {
+        async function saveBolsistaSchedule(btn) {
             const bolsistaId = document.getElementById('schedule-bolsista-select').value;
             if (!bolsistaId) return;
 
+            if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
             try {
                 // 1. Identificar o que remover e o que adicionar
                 const toRemove = originalScales.filter(o => !pendingScales.some(p => p.dia_semana === o.dia_semana && p.hora_inicio === o.hora_inicio));
@@ -509,9 +594,12 @@
                     })));
                 }
 
-                alert("Escala atualizada com sucesso!");
-                await loadBolsistaSchedule(); // Recarregar do banco
-            } catch (e) { alert("Erro ao salvar escala: " + e.message); }
+                toast("Escala atualizada com sucesso!");
+                await loadBolsistaSchedule(); // Recarregar do banco (re-renderiza o botão)
+            } catch (e) {
+                toast("Erro ao salvar escala: " + e.message, 'error');
+                if (btn) { btn.disabled = false; btn.textContent = 'Confirmar Alterações de Horário'; }
+            }
         }
 
         function toggleScheduleAdmin() {
@@ -569,35 +657,59 @@
             container.innerHTML = allParticipants.map(p => `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <label style="display:flex; align-items:center; gap:10px; cursor:pointer; flex:1;">
-                        <input type="checkbox" class="resp-checkbox" value="${p.nome}" style="width:auto;"> ${p.nome}
+                        <input type="checkbox" class="resp-checkbox" value="${sanitize(p.nome)}" style="width:auto;"> ${sanitize(p.nome)}
                     </label>
-                    <span onclick="renameBolsista('${p.id}', '${p.nome}')" style="cursor:pointer; opacity:0.5;">✏️</span>
+                    <span class="rename-btn" data-id="${p.id}" style="cursor:pointer; opacity:0.5;">✏️</span>
                 </div>
             `).join('') + `<div onclick="addBolsista()" style="text-align:center; color:var(--primary); cursor:pointer; padding:10px; border:1px dashed var(--primary); margin-top:10px; border-radius:8px;">+ Adicionar Bolsista</div>`;
+            container.querySelectorAll('.rename-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const p = allParticipants.find(x => x.id == btn.dataset.id);
+                    if (p) renameBolsista(p.id, p.nome);
+                };
+            });
+        }
+
+        function filterTasks(text) {
+            taskFilter = text.toLowerCase();
+            renderTasks();
         }
 
         function renderTasks() {
+            const filtered = taskFilter
+                ? activeTasks.filter(t =>
+                    t.descricao?.toLowerCase().includes(taskFilter) ||
+                    t.projetos?.nome?.toLowerCase().includes(taskFilter))
+                : activeTasks;
+
+            document.getElementById('badge-ativas').textContent = activeTasks.length;
+            document.getElementById('badge-concluidas').textContent = finishedTasks.length;
+
             const activeContainer = document.getElementById('tasks-active');
-            activeContainer.innerHTML = activeTasks.map(t => `
-                <div class="task-row">
-                    <div class="task-row-project">[${t.projetos?.nome || '?'}]</div>
-                    <div class="task-row-desc">${t.descricao}</div>
-                    <div class="task-row-actions">
-                        <button class="btn-edit btn-finish-quick" onclick="finishTaskQuickly('${t.id}', '${t.descricao.replace(/'/g, "\\'")}')" title="Concluir">✓</button>
-                        <button class="btn-edit" onclick="prepareEdit(${JSON.stringify(t).replace(/"/g, '&quot;')})">Editar</button>
-                        <button class="btn-edit btn-delete" onclick="deleteTask('${t.id}')">🗑️</button>
+            if (taskFilter && filtered.length === 0) {
+                activeContainer.innerHTML = '<p style="font-size:0.8rem; text-align:center; opacity:0.5; padding:1rem;">Nenhuma tarefa encontrada.</p>';
+            } else {
+                activeContainer.innerHTML = filtered.map(t => `
+                    <div class="task-row">
+                        <div class="task-row-project">[${sanitize(t.projetos?.nome || '?')}]</div>
+                        <div class="task-row-desc">${sanitize(t.descricao)}</div>
+                        <div class="task-row-actions">
+                            <button class="btn-edit btn-finish-quick" onclick="finishTaskQuickly('${t.id}', this)" title="Concluir">✓</button>
+                            <button class="btn-edit" onclick="prepareEditById('${t.id}')">Editar</button>
+                            <button class="btn-edit btn-delete" onclick="deleteTask('${t.id}', this)">🗑️</button>
+                        </div>
                     </div>
-                </div>
-            `).join('');
+                `).join('');
+            }
 
             const finishedContainer = document.getElementById('tasks-finished');
             finishedContainer.innerHTML = finishedTasks.map(t => `
                 <div class="task-row">
-                    <div class="task-row-project" style="text-decoration:line-through;">[${t.projetos?.nome || '?'}]</div>
-                    <div class="task-row-desc" style="text-decoration:line-through;">${t.descricao}</div>
+                    <div class="task-row-project" style="text-decoration:line-through;">[${sanitize(t.projetos?.nome || '?')}]</div>
+                    <div class="task-row-desc" style="text-decoration:line-through;">${sanitize(t.descricao)}</div>
                     <div class="task-row-actions">
-                        <button class="btn-edit btn-reopen" onclick="reopenTask('${t.id}')">Reabrir</button>
-                        <button class="btn-edit btn-delete" onclick="deleteTask('${t.id}')">🗑️</button>
+                        <button class="btn-edit btn-reopen" onclick="reopenTask('${t.id}', this)">Reabrir</button>
+                        <button class="btn-edit btn-delete" onclick="deleteTask('${t.id}', this)">🗑️</button>
                     </div>
                 </div>
             `).join('');
@@ -605,9 +717,9 @@
             const exContainer = document.getElementById('tasks-excluida');
             exContainer.innerHTML = deletedTasks.map(t => `
                 <div class="task-row">
-                    <div class="task-row-project">[${t.projetos?.nome || '?'}]</div>
-                    <div class="task-row-desc">${t.descricao}</div>
-                    <div class="task-row-actions"><button class="btn-edit btn-restore" onclick="restoreTask('${t.id}')">Restaurar</button></div>
+                    <div class="task-row-project">[${sanitize(t.projetos?.nome || '?')}]</div>
+                    <div class="task-row-desc">${sanitize(t.descricao)}</div>
+                    <div class="task-row-actions"><button class="btn-edit btn-restore" onclick="restoreTask('${t.id}', this)">Restaurar</button></div>
                 </div>
             `).join('');
             if (deletedTasks.length === 0) exContainer.innerHTML = '<p style="font-size:0.7rem; text-align:center;">Lixeira vazia</p>';
@@ -661,61 +773,97 @@
             const prazo = document.getElementById('task-deadline').value || null;
             const prioridade = document.getElementById('task-priority').value;
 
-            if (!descricao || resps.length === 0) return alert("Preencha descrição e responsáveis!");
+            if (!projeto_id || projeto_id === 'NEW_PROJECT') return toast("Selecione um projeto!", 'warn');
+            if (!descricao) return toast("Preencha a descrição da tarefa!", 'warn');
+            if (resps.length === 0) return toast("Selecione ao menos um responsável!", 'warn');
+            if (prazo && data_inicio && prazo < data_inicio) return toast("O prazo não pode ser anterior à data de início!", 'warn');
 
+            const saveBtn = document.getElementById('save-task-btn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Salvando...';
             try {
                 if (editingTaskId) {
                     await supabaseClient.from('tarefas').update({ projeto_id, descricao, responsaveis: resps, data_inicio, prazo, prioridade }).eq('id', editingTaskId);
+                    toast("Tarefa atualizada!");
                 } else {
                     await supabaseClient.from('tarefas').insert([{ projeto_id, descricao, responsaveis: resps, status: 'pendente', data_inicio, prazo, prioridade }]);
+                    toast("Tarefa criada!");
                 }
                 cancelEdit();
                 await updateTasks();
                 renderTasks();
-            } catch (e) { alert(e.message); }
+            } catch (e) {
+                toast(e.message, 'error');
+                saveBtn.disabled = false;
+                saveBtn.textContent = editingTaskId ? 'Salvar Alterações' : 'Salvar Tarefa';
+            }
         }
 
         async function finishTask() {
             if (!editingTaskId) return;
-            const taskDesc = document.getElementById('task-desc').value;
-            finishTaskQuickly(editingTaskId, taskDesc);
+            finishTaskQuickly(editingTaskId);
         }
 
-        async function finishTaskQuickly(id, desc) {
-            if (!confirm(`Marcar "${desc}" como concluída?`)) return;
+        function prepareEditById(id) {
+            const task = activeTasks.find(t => t.id === id);
+            if (task) prepareEdit(task);
+        }
+
+        async function finishTaskQuickly(id, btn) {
+            const task = activeTasks.find(t => t.id === id);
+            const desc = task?.descricao || '';
+            if (!await confirmModal(`Marcar como concluída?\n"${desc}"`, 'Concluir', 'background: var(--accent); color: white; flex:1;')) return;
+            if (btn) { btn.disabled = true; btn.textContent = '...'; }
             try {
                 const { error } = await supabaseClient.from('tarefas').update({ status: 'concluida' }).eq('id', id);
                 if (error) throw error;
                 if (editingTaskId === id) cancelEdit();
                 await updateTasks();
                 renderTasks();
-            } catch (e) { alert("Erro: " + e.message); }
+            } catch (e) {
+                toast("Erro: " + e.message, 'error');
+                if (btn) { btn.disabled = false; btn.textContent = '✓'; }
+            }
         }
 
-        async function deleteTask(id) {
-            if (!confirm("Mover tarefa para a lixeira?")) return;
+        async function deleteTask(id, btn) {
+            if (!await confirmModal("Mover tarefa para a lixeira?", 'Mover para Lixeira', 'background: rgba(239,68,68,0.8); color: white; flex:1;')) return;
+            if (btn) { btn.disabled = true; btn.textContent = '...'; }
             try {
-                // Soft Delete: Apenas muda o status para 'excluida'
                 const { error } = await supabaseClient.from('tarefas').update({ status: 'excluida' }).eq('id', id);
                 if (error) throw error;
                 await updateTasks();
                 renderTasks();
-            } catch (e) { alert("Erro ao mover para lixeira: " + e.message); }
+            } catch (e) {
+                toast("Erro ao mover para lixeira: " + e.message, 'error');
+                if (btn) { btn.disabled = false; btn.textContent = '🗑️'; }
+            }
         }
 
-        async function restoreTask(id) {
+        async function restoreTask(id, btn) {
+            if (btn) { btn.disabled = true; btn.textContent = '...'; }
             try {
                 const { error } = await supabaseClient.from('tarefas').update({ status: 'pendente' }).eq('id', id);
                 if (error) throw error;
                 await updateTasks();
                 renderTasks();
-            } catch (e) { alert("Erro ao restaurar: " + e.message); }
+            } catch (e) {
+                toast("Erro ao restaurar: " + e.message, 'error');
+                if (btn) { btn.disabled = false; btn.textContent = 'Restaurar'; }
+            }
         }
 
-        async function reopenTask(id) {
-            await supabaseClient.from('tarefas').update({ status: 'pendente' }).eq('id', id);
-            await updateTasks();
-            renderTasks();
+        async function reopenTask(id, btn) {
+            if (btn) { btn.disabled = true; btn.textContent = '...'; }
+            try {
+                const { error } = await supabaseClient.from('tarefas').update({ status: 'pendente' }).eq('id', id);
+                if (error) throw error;
+                await updateTasks();
+                renderTasks();
+            } catch (e) {
+                toast("Erro ao reabrir: " + e.message, 'error');
+                if (btn) { btn.disabled = false; btn.textContent = 'Reabrir'; }
+            }
         }
 
         async function addBolsista() {
@@ -748,14 +896,20 @@
         document.getElementById('cancel-edit-btn').onclick = cancelEdit;
         document.getElementById('finish-task-btn').onclick = finishTask;
 
-        document.getElementById('save-notice-btn').onclick = async () => {
+        document.getElementById('save-notice-btn').onclick = async function() {
             const val = document.getElementById('global-notice-input').value.trim();
+            this.disabled = true;
+            this.textContent = 'Salvando...';
             try {
                 const { error } = await supabaseClient.from('configuracoes')
                     .upsert({ chave: 'aviso_principal', valor: val }, { onConflict: 'chave' });
                 if (error) throw error;
-                alert("Aviso atualizado com sucesso!");
-            } catch (e) { alert("Erro ao salvar aviso: " + e.message); }
+                toast("Aviso atualizado com sucesso!");
+            } catch (e) { toast("Erro ao salvar aviso: " + e.message, 'error'); }
+            finally {
+                this.disabled = false;
+                this.textContent = 'Atualizar Aviso';
+            }
         };
 
         async function init() {
