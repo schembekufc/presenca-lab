@@ -635,11 +635,23 @@
 
         async function loadData() {
             // Carregar aviso
-            const { data: notices } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_principal').single();
+            const [{ data: notices }, { data: noticeStartCfg }, { data: noticeEndCfg }] = await Promise.all([
+                supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_principal').single(),
+                supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_inicio').single(),
+                supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_fim').single(),
+            ]);
             const noticeBoard = document.getElementById('notice-board');
             if (notices && notices.valor) {
-                document.getElementById('notice-text').innerText = notices.valor;
-                noticeBoard.style.display = 'block';
+                const today = new Date().toISOString().split('T')[0];
+                const inicio = noticeStartCfg && noticeStartCfg.valor ? noticeStartCfg.valor : null;
+                const fim = noticeEndCfg && noticeEndCfg.valor ? noticeEndCfg.valor : null;
+                const dentroDoIntervalo = (!inicio || today >= inicio) && (!fim || today <= fim);
+                if (dentroDoIntervalo) {
+                    document.getElementById('notice-text').innerText = notices.valor;
+                    noticeBoard.style.display = 'block';
+                } else {
+                    noticeBoard.style.display = 'none';
+                }
             } else {
                 noticeBoard.style.display = 'none';
             }

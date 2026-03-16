@@ -367,6 +367,17 @@
                 <input type="text" id="global-notice-input" placeholder="Ex: Reunião geral amanhã às 14h no Lab.">
                 <p style="font-size: 0.7rem; color: var(--secondary); margin-top: 5px;">Deixe em branco para ocultar o quadro de avisos na página principal.</p>
             </div>
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 140px;">
+                    <label>Exibir a partir de</label>
+                    <input type="date" id="notice-start-input">
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 140px;">
+                    <label>Exibir até</label>
+                    <input type="date" id="notice-end-input">
+                </div>
+            </div>
+            <p style="font-size: 0.7rem; color: var(--secondary); margin-top: -0.5rem; margin-bottom: 1rem;">Deixe as datas em branco para exibir o aviso sem restrição de período.</p>
             <button class="btn-action" id="save-notice-btn">Atualizar Aviso</button>
         </div>
 
@@ -530,6 +541,10 @@
             // Carregar aviso global
             const { data: notice } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_principal').single();
             if (notice) document.getElementById('global-notice-input').value = notice.valor;
+            const { data: noticeStart } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_inicio').single();
+            if (noticeStart && noticeStart.valor) document.getElementById('notice-start-input').value = noticeStart.valor;
+            const { data: noticeEnd } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_fim').single();
+            if (noticeEnd && noticeEnd.valor) document.getElementById('notice-end-input').value = noticeEnd.valor;
 
             // Definir data padrão de início como hoje
             document.getElementById('task-start').value = new Date().toISOString().split('T')[0];
@@ -917,10 +932,12 @@
 
         document.getElementById('save-notice-btn').onclick = async function() {
             const val = document.getElementById('global-notice-input').value.trim();
+            const inicio = document.getElementById('notice-start-input').value;
+            const fim = document.getElementById('notice-end-input').value;
             this.disabled = true;
             this.textContent = 'Salvando...';
             try {
-                await adminAction('save_notice', { valor: val });
+                await adminAction('save_notice', { valor: val, inicio, fim });
                 toast("Aviso atualizado com sucesso!");
             } catch (e) { toast("Erro ao salvar aviso: " + e.message, 'error'); }
             finally {

@@ -149,6 +149,18 @@ serve(async (req) => {
           { chave: "aviso_principal", valor: payload.valor },
           { onConflict: "chave" }
         ));
+        if (!error) {
+          ({ error } = await supabase.from("configuracoes").upsert(
+            { chave: "aviso_inicio", valor: payload.inicio ?? "" },
+            { onConflict: "chave" }
+          ));
+        }
+        if (!error) {
+          ({ error } = await supabase.from("configuracoes").upsert(
+            { chave: "aviso_fim", valor: payload.fim ?? "" },
+            { onConflict: "chave" }
+          ));
+        }
         break;
 
       default:
