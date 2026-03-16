@@ -360,25 +360,18 @@
             </div>
         </div>
 
-        <div class="admin-section-divider">Quadro de Avisos (Global)</div>
+        <div class="admin-section-divider">Quadro de Avisos</div>
         <div style="background: rgba(255, 255, 255, 0.03); padding: 1.5rem; border-radius: 1rem; border: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 2rem;">
             <div class="form-group">
                 <label>Texto do Aviso</label>
-                <input type="text" id="global-notice-input" placeholder="Ex: Reunião geral amanhã às 14h no Lab.">
-                <p style="font-size: 0.7rem; color: var(--secondary); margin-top: 5px;">Deixe em branco para ocultar o quadro de avisos na página principal.</p>
+                <input type="text" id="new-aviso-texto" placeholder="Ex: Reunião geral hoje às 14h no Lab.">
             </div>
-            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                <div class="form-group" style="flex: 1; min-width: 140px;">
-                    <label>Exibir a partir de</label>
-                    <input type="date" id="notice-start-input">
-                </div>
-                <div class="form-group" style="flex: 1; min-width: 140px;">
-                    <label>Exibir até</label>
-                    <input type="date" id="notice-end-input">
-                </div>
+            <div class="form-group">
+                <label>Data de Exibição</label>
+                <input type="date" id="new-aviso-data">
             </div>
-            <p style="font-size: 0.7rem; color: var(--secondary); margin-top: -0.5rem; margin-bottom: 1rem;">Deixe as datas em branco para exibir o aviso sem restrição de período.</p>
-            <button class="btn-action" id="save-notice-btn">Atualizar Aviso</button>
+            <button class="btn-action" id="add-aviso-btn">Adicionar Aviso</button>
+            <div id="avisos-list" style="margin-top: 1.5rem;"></div>
         </div>
 
         <div class="admin-section-divider">Tarefas Ativas <span id="badge-ativas" style="background:var(--primary);color:#0f172a;border-radius:12px;padding:1px 8px;font-size:0.75rem;margin-left:6px;">0</span></div>
@@ -538,13 +531,9 @@
             const grid = document.getElementById('admin-schedule-grid');
             grid.innerHTML = '<div style="grid-column: span 6; text-align: center; padding: 20px; font-size: 0.8rem; opacity: 0.5;">Selecione um bolsista acima para editar a escala.</div>';
 
-            // Carregar aviso global
-            const { data: notice } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_principal').single();
-            if (notice) document.getElementById('global-notice-input').value = notice.valor;
-            const { data: noticeStart } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_inicio').single();
-            if (noticeStart && noticeStart.valor) document.getElementById('notice-start-input').value = noticeStart.valor;
-            const { data: noticeEnd } = await supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_fim').single();
-            if (noticeEnd && noticeEnd.valor) document.getElementById('notice-end-input').value = noticeEnd.valor;
+            // Carregar avisos
+            const { data: avisosList } = await supabaseClient.from('avisos').select('*').order('data_exibicao').order('created_at');
+            renderAvisosList(avisosList || []);
 
             // Definir data padrão de início como hoje
             document.getElementById('task-start').value = new Date().toISOString().split('T')[0];
@@ -930,19 +919,48 @@
         document.getElementById('cancel-edit-btn').onclick = cancelEdit;
         document.getElementById('finish-task-btn').onclick = finishTask;
 
-        document.getElementById('save-notice-btn').onclick = async function() {
-            const val = document.getElementById('global-notice-input').value.trim();
-            const inicio = document.getElementById('notice-start-input').value;
-            const fim = document.getElementById('notice-end-input').value;
-            this.disabled = true;
-            this.textContent = 'Salvando...';
+        function renderAvisosList(avisos) {
+            const list = document.getElementById('avisos-list');
+            if (!avisos || avisos.length === 0) {
+                list.innerHTML = '<p style="font-size: 0.8rem; color: var(--secondary); text-align: center; margin-top: 0.5rem;">Nenhum aviso cadastrado.</p>';
+                return;
+            }
+            list.innerHTML = avisos.map(a => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.8rem 1rem; background: rgba(255,255,255,0.04); border-radius: 0.5rem; margin-bottom: 0.5rem; gap: 1rem;">
+                    <div style="flex: 1; min-width: 0;">
+                        <span style="font-size: 0.75rem; color: #fbbf24; font-weight: 600;">${new Date(a.data_exibicao + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                        <p style="margin: 2px 0 0; font-size: 0.9rem; word-break: break-word;">${sanitize(a.texto)}</p>
+                    </div>
+                    <button onclick="deleteAviso('${a.id}')" style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; border-radius: 0.4rem; padding: 4px 10px; cursor: pointer; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0;">Excluir</button>
+                </div>
+            `).join('');
+        }
+
+        async function deleteAviso(id) {
+            if (!confirm('Excluir este aviso?')) return;
             try {
-                await adminAction('save_notice', { valor: val, inicio, fim });
-                toast("Aviso atualizado com sucesso!");
-            } catch (e) { toast("Erro ao salvar aviso: " + e.message, 'error'); }
+                await adminAction('delete_aviso', { id });
+                toast('Aviso excluído.');
+                await loadData();
+            } catch (e) { toast('Erro: ' + e.message, 'error'); }
+        }
+
+        document.getElementById('add-aviso-btn').onclick = async function() {
+            const texto = document.getElementById('new-aviso-texto').value.trim();
+            const data = document.getElementById('new-aviso-data').value;
+            if (!texto || !data) { toast('Preencha o texto e a data.', 'error'); return; }
+            this.disabled = true;
+            this.textContent = 'Adicionando...';
+            try {
+                await adminAction('add_aviso', { texto, data_exibicao: data });
+                document.getElementById('new-aviso-texto').value = '';
+                document.getElementById('new-aviso-data').value = '';
+                toast('Aviso adicionado!');
+                await loadData();
+            } catch (e) { toast('Erro: ' + e.message, 'error'); }
             finally {
                 this.disabled = false;
-                this.textContent = 'Atualizar Aviso';
+                this.textContent = 'Adicionar Aviso';
             }
         };
 

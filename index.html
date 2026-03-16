@@ -552,15 +552,7 @@
         <div class="loading">Sincronizando com Google Sheets...</div>
     </div>
 
-    <div class="notice-container" id="notice-board" style="display: none; margin-top: 1rem;">
-        <div class="notice-card">
-            <div class="notice-icon">📢</div>
-            <div class="notice-content">
-                <div class="notice-title">Quadro de Avisos</div>
-                <div class="notice-text" id="notice-text">Carregando avisos...</div>
-            </div>
-        </div>
-    </div>
+    <div id="notice-board" style="width: 100%; max-width: 500px; margin-top: 1rem;"></div>
 
     <!-- Modal Horário Individual -->
     <div id="modal-individual" class="modal-overlay">
@@ -634,26 +626,22 @@
         }
 
         async function loadData() {
-            // Carregar aviso
-            const [{ data: notices }, { data: noticeStartCfg }, { data: noticeEndCfg }] = await Promise.all([
-                supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_principal').single(),
-                supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_inicio').single(),
-                supabaseClient.from('configuracoes').select('*').eq('chave', 'aviso_fim').single(),
-            ]);
+            // Carregar avisos do dia
+            const today = new Date().toISOString().split('T')[0];
+            const { data: avisosHoje } = await supabaseClient.from('avisos').select('*').eq('data_exibicao', today).order('created_at');
             const noticeBoard = document.getElementById('notice-board');
-            if (notices && notices.valor) {
-                const today = new Date().toISOString().split('T')[0];
-                const inicio = noticeStartCfg && noticeStartCfg.valor ? noticeStartCfg.valor : null;
-                const fim = noticeEndCfg && noticeEndCfg.valor ? noticeEndCfg.valor : null;
-                const dentroDoIntervalo = (!inicio || today >= inicio) && (!fim || today <= fim);
-                if (dentroDoIntervalo) {
-                    document.getElementById('notice-text').innerText = notices.valor;
-                    noticeBoard.style.display = 'block';
-                } else {
-                    noticeBoard.style.display = 'none';
-                }
+            if (avisosHoje && avisosHoje.length > 0) {
+                noticeBoard.innerHTML = avisosHoje.map(a => `
+                    <div class="notice-card" style="margin-bottom: 0.75rem;">
+                        <div class="notice-icon">📢</div>
+                        <div class="notice-content">
+                            <div class="notice-title">Quadro de Avisos</div>
+                            <div class="notice-text">${sanitize(a.texto)}</div>
+                        </div>
+                    </div>
+                `).join('');
             } else {
-                noticeBoard.style.display = 'none';
+                noticeBoard.innerHTML = '';
             }
 
             const { data: projs } = await supabaseClient.from('projetos').select('*').order('nome');

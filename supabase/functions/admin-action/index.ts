@@ -144,23 +144,15 @@ serve(async (req) => {
         ({ error } = await supabase.from("projetos").insert([{ nome: payload.nome }]));
         break;
 
-      case "save_notice":
-        ({ error } = await supabase.from("configuracoes").upsert(
-          { chave: "aviso_principal", valor: payload.valor },
-          { onConflict: "chave" }
-        ));
-        if (!error) {
-          ({ error } = await supabase.from("configuracoes").upsert(
-            { chave: "aviso_inicio", valor: payload.inicio ?? "" },
-            { onConflict: "chave" }
-          ));
-        }
-        if (!error) {
-          ({ error } = await supabase.from("configuracoes").upsert(
-            { chave: "aviso_fim", valor: payload.fim ?? "" },
-            { onConflict: "chave" }
-          ));
-        }
+      case "add_aviso":
+        ({ error } = await supabase.from("avisos").insert([{
+          texto: payload.texto,
+          data_exibicao: payload.data_exibicao,
+        }]));
+        break;
+
+      case "delete_aviso":
+        ({ error } = await supabase.from("avisos").delete().eq("id", payload.id));
         break;
 
       default:
