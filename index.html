@@ -516,6 +516,75 @@
         .edit-input { width:100%; background:#0f172a; color:var(--text); border:1px solid rgba(255,255,255,0.15); border-radius:0.5rem; padding:0.5rem 0.7rem; font-family:inherit; font-size:0.9rem; outline:none; }
         .edit-input:focus { border-color:var(--primary); }
 
+        .btn-task-lookup {
+            background: #2dd4bf;
+            color: #0f172a;
+            border: none;
+        }
+        .btn-task-lookup:hover { background: #14b8a6; }
+
+        .task-lookup-detail {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 1rem;
+            padding: 1.2rem 1.4rem;
+            margin-top: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .task-lookup-desc {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.4;
+        }
+
+        .task-lookup-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .task-lookup-resps-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05rem;
+            color: var(--secondary);
+            margin-top: 0.25rem;
+        }
+
+        .task-lookup-resps-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .task-lookup-resps-list li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 0.5rem 0.75rem;
+            background: rgba(56, 189, 248, 0.07);
+            border: 1px solid rgba(56, 189, 248, 0.15);
+            border-radius: 0.6rem;
+        }
+
+        .task-lookup-resps-list li::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--accent);
+            flex-shrink: 0;
+        }
+
     </style>
 </head>
 
@@ -530,6 +599,7 @@
         <div class="control-group" style="width:100%;">
             <button id="toggle-mode" class="btn-mode btn-realtime">Modo: Real-Time</button>
             <button id="btn-view-individual" class="btn-mode btn-schedule">Horário Individual</button>
+            <button id="btn-lookup-task" class="btn-mode btn-task-lookup">Consultar Tarefa</button>
             <button id="admin-btn" class="btn-mode btn-admin">Administrador</button>
         </div>
         <div class="control-group">
@@ -778,6 +848,70 @@
         const adminBtn = document.getElementById('admin-btn');
         adminBtn.addEventListener('click', () => { window.location.href = 'admin.html'; });
 
+        // Lógica consultar tarefa
+        const btnLookupTask = document.getElementById('btn-lookup-task');
+        const modalTaskLookup = document.getElementById('modal-task-lookup');
+        const closeTaskLookup = document.getElementById('close-task-lookup');
+        const selectTaskLookup = document.getElementById('select-task-lookup');
+
+        btnLookupTask.onclick = () => {
+            selectTaskLookup.innerHTML = '<option value="">-- Selecione uma tarefa --</option>' +
+                cachedTasks.map(t => {
+                    const proj = t.projetos?.nome ? `[${t.projetos.nome}] ` : '';
+                    return `<option value="${t.id}">${sanitize(proj + t.descricao)}</option>`;
+                }).join('');
+            document.getElementById('task-lookup-result').innerHTML = '<p style="opacity:0.5;">Escolha uma tarefa acima para ver os detalhes.</p>';
+            modalTaskLookup.style.display = 'flex';
+        };
+
+        closeTaskLookup.onclick = () => modalTaskLookup.style.display = 'none';
+
+        selectTaskLookup.onchange = () => {
+            const taskId = selectTaskLookup.value;
+            const result = document.getElementById('task-lookup-result');
+            if (!taskId) {
+                result.innerHTML = '<p style="opacity:0.5;">Escolha uma tarefa acima para ver os detalhes.</p>';
+                return;
+            }
+            const task = cachedTasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            const prazoDate = task.prazo
+                ? new Date(task.prazo + 'T12:00:00').toLocaleDateString('pt-BR')
+                : null;
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
+            const prazoDate2 = task.prazo ? new Date(task.prazo + 'T23:59:59') : null;
+            let statusClass = 'status-sem-prazo';
+            if (prazoDate2) {
+                const diff = Math.ceil((prazoDate2 - hoje) / (1000*60*60*24));
+                if (diff < 0) statusClass = 'status-atrasado';
+                else if (diff <= 7) statusClass = 'status-urgente';
+                else statusClass = 'status-em-dia';
+            }
+            const resps = task.responsaveis || [];
+            const deadlineColor = { 'status-atrasado': '#ef4444', 'status-urgente': '#f59e0b', 'status-em-dia': '#cbd5e1', 'status-sem-prazo': 'var(--primary)' }[statusClass] || 'var(--secondary)';
+
+            result.innerHTML = `
+                <div class="task-lookup-detail">
+                    <div class="task-lookup-desc">${sanitize(task.descricao)}</div>
+                    <div class="task-lookup-meta">
+                        <span class="project-tag">${sanitize(task.projetos?.nome || '—')}</span>
+                        <span class="priority-tag priority-${task.prioridade || 'media'}">Prioridade: ${sanitize(task.prioridade || 'média')}</span>
+                        ${prazoDate
+                            ? `<span style="font-size:0.85rem; font-weight:bold; color:${deadlineColor};">📅 Prazo: ${prazoDate}</span>`
+                            : `<span style="font-size:0.85rem; color:var(--secondary);">Sem prazo</span>`
+                        }
+                    </div>
+                    <div>
+                        <div class="task-lookup-resps-title">Responsáveis (${resps.length})</div>
+                        ${resps.length > 0
+                            ? `<ul class="task-lookup-resps-list">${resps.map(r => `<li>${sanitize(r)}</li>`).join('')}</ul>`
+                            : `<p style="opacity:0.5; font-size:0.9rem; margin-top:0.4rem;">Nenhum responsável atribuído.</p>`
+                        }
+                    </div>
+                </div>`;
+        };
+
         // Lógica horários individuais
         const btnIndividual = document.getElementById('btn-view-individual');
         const modalIndividual = document.getElementById('modal-individual');
@@ -972,6 +1106,21 @@
 
         init();
     </script>
+
+    <!-- Modal Consultar Tarefa -->
+    <div id="modal-task-lookup" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" id="close-task-lookup">&times;</span>
+            <h2 style="margin-bottom: 0.5rem;">Consultar Tarefa</h2>
+            <div class="control-group" style="justify-content: flex-start; margin-bottom: 0;">
+                <label>Selecionar Tarefa:</label>
+                <select id="select-task-lookup" class="individual-selector" style="flex:1; min-width:0;"></select>
+            </div>
+            <div id="task-lookup-result" style="text-align:center; padding:1.5rem 0; opacity:0.5; font-size:0.95rem;">
+                Escolha uma tarefa acima para ver os detalhes.
+            </div>
+        </div>
+    </div>
 
     <!-- Modal de Confirmação -->
     <div id="confirm-modal-index" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.88); backdrop-filter:blur(8px); z-index:3100; align-items:center; justify-content:center; padding:1rem;">
