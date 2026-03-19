@@ -360,6 +360,16 @@
             </div>
         </div>
 
+        <div class="admin-section-divider">Bolsistas</div>
+        <button class="btn-action btn-secondary" onclick="toggleBolsistasSection()" style="margin-bottom: 2rem;">Gerenciar Bolsistas</button>
+        <div id="bolsistas-admin-section" style="display: none; background: rgba(0,0,0,0.2); padding: 1.5rem; border-radius: 1rem; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 2rem;">
+            <div id="bolsistas-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 1rem;"></div>
+            <div style="display: flex; gap: 8px; margin-top: 0.5rem;">
+                <input type="text" id="new-bolsista-nome" placeholder="Nome do novo bolsista" style="flex:1;">
+                <button class="btn-action" onclick="addBolsistaUI()" style="width:auto; padding: 0.7rem 1.2rem; white-space:nowrap;">+ Adicionar</button>
+            </div>
+        </div>
+
         <div class="admin-section-divider">Quadro de Avisos</div>
         <div style="background: rgba(255, 255, 255, 0.03); padding: 1.5rem; border-radius: 1rem; border: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 2rem;">
             <div class="form-group">
@@ -510,6 +520,10 @@
         }
 
         passInput.onkeydown = (e) => { if (e.key === 'Enter') loginBtn.click(); };
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && document.activeElement?.id === 'new-bolsista-nome') addBolsistaUI();
+        });
 
         // Data Logic
         async function loadData() {
@@ -881,6 +895,62 @@
                 toast("Erro ao reabrir: " + e.message, 'error');
                 if (btn) { btn.disabled = false; btn.textContent = 'Reabrir'; }
             }
+        }
+
+        function toggleBolsistasSection() {
+            const el = document.getElementById('bolsistas-admin-section');
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            if (el.style.display === 'block') renderBolsistasList();
+        }
+
+        function renderBolsistasList() {
+            const container = document.getElementById('bolsistas-list');
+            if (!container) return;
+            const sorted = [...allParticipants].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+            container.innerHTML = sorted.length === 0
+                ? '<p style="opacity:0.5; font-size:0.9rem;">Nenhum bolsista cadastrado.</p>'
+                : sorted.map(p => `
+                    <div id="bolsista-row-${p.id}" style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.03); padding:0.6rem 0.8rem; border-radius:0.5rem; border:1px solid rgba(255,255,255,0.06);">
+                        <span style="flex:1; font-weight:600;">${sanitize(p.nome)}</span>
+                        <button onclick="startEditBolsista('${p.id}', '${sanitize(p.nome).replace(/'/g, "\\'")}')" style="background:rgba(56,189,248,0.1); color:var(--primary); border:1px solid rgba(56,189,248,0.3); padding:4px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem; font-weight:600;">Editar</button>
+                    </div>`).join('');
+        }
+
+        function startEditBolsista(id, nome) {
+            const row = document.getElementById(`bolsista-row-${id}`);
+            if (!row) return;
+            row.innerHTML = `
+                <input type="text" value="${sanitize(nome)}" id="edit-bolsista-input-${id}" style="flex:1; padding:4px 8px; font-size:0.95rem;">
+                <button onclick="saveEditBolsista('${id}')" style="background:var(--accent); color:white; border:none; padding:4px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem; font-weight:600;">Salvar</button>
+                <button onclick="renderBolsistasList()" style="background:rgba(255,255,255,0.05); color:var(--secondary); border:1px solid rgba(255,255,255,0.1); padding:4px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem;">Cancelar</button>`;
+            document.getElementById(`edit-bolsista-input-${id}`).focus();
+            document.getElementById(`edit-bolsista-input-${id}`).onkeydown = (e) => { if (e.key === 'Enter') saveEditBolsista(id); };
+        }
+
+        async function saveEditBolsista(id) {
+            const input = document.getElementById(`edit-bolsista-input-${id}`);
+            const n = input?.value?.trim();
+            const old = allParticipants.find(p => p.id === id)?.nome;
+            if (!n || n === old) { renderBolsistasList(); return; }
+            try {
+                await adminAction('rename_bolsista', { id, nome: n });
+                toast('Nome atualizado!');
+                await loadData();
+                renderBolsistasList();
+            } catch(e) { toast('Erro: ' + e.message, 'error'); }
+        }
+
+        async function addBolsistaUI() {
+            const input = document.getElementById('new-bolsista-nome');
+            const n = input?.value?.trim();
+            if (!n) return;
+            try {
+                await adminAction('add_bolsista', { nome: n });
+                toast('Bolsista adicionado!');
+                input.value = '';
+                await loadData();
+                renderBolsistasList();
+            } catch(e) { toast('Erro: ' + e.message, 'error'); }
         }
 
         async function addBolsista() {
